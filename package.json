@@ -1,0 +1,27 @@
+{
+  "name": "beth-llm-chat-service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Manevle16/beth-llm-chat-service.git",
+  "author": "Manevle16 <manevle16@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "serve": "node index.js",
+    "dev": "node index.js",
+    "dev:https": "node index.js --https",
+    "generate-ssl": "node scripts/generate-ssl.js",
+    "test-ssl": "node scripts/test-ssl.js",
+    "test-ollama": "node scripts/test-ollama.js",
+    "test-database": "node scripts/test-database.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "apollo-server-express": "^3.12.1",
+    "graphql": "^16.8.1",
+    "pg": "^8.11.3",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "ollama": "^0.4.4"
+  }
+}

@@ -1,0 +1,331 @@
+{
+  "info": {
+    "name": "Beth LLM Chat Service - GraphQL API",
+    "description": "Complete GraphQL API collection for the Beth LLM Chat Service with password-protected conversations and Ollama LLM integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://localhost:3443",
+      "type": "string"
+    },
+    {
+      "key": "graphql_endpoint",
+      "value": "{{base_url}}/graphql",
+      "type": "string"
+    },
+    {
+      "key": "conversation_id",
+      "value": "test-conversation-123",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "mypassword123",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the server is running and healthy"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Get All Public Conversations",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query {\\n  conversations {\\n    conversations {\\n      id\\n      tabName\\n      llmModel\\n      isPrivate\\n      createdAt\\n      updatedAt\\n      messageCount\\n      messages {\\n        id\\n        text\\n        sender\\n        timestamp\\n      }\\n    }\\n    count\\n  }\\n}\"\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Get all public conversations (no password required)"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Get Specific Conversation (Public)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query GetConversation($id: String!) {\\n  conversation(id: $id) {\\n    id\\n    tabName\\n    llmModel\\n    isPrivate\\n    createdAt\\n    updatedAt\\n    messageCount\\n    messages {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"id\": \"{{conversation_id}}\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Get a specific public conversation with all its messages"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Get Specific Conversation (Private with Password)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query GetPrivateConversation($id: String!, $password: String) {\\n  conversation(id: $id, password: $password) {\\n    id\\n    tabName\\n    llmModel\\n    isPrivate\\n    createdAt\\n    updatedAt\\n    messageCount\\n    messages {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"id\": \"{{conversation_id}}\",\n    \"password\": \"{{password}}\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Get a private conversation using password authentication"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Get Messages for Conversation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query GetMessages($conversationId: String!, $password: String) {\\n  messages(conversationId: $conversationId, password: $password) {\\n    id\\n    conversationId\\n    text\\n    sender\\n    timestamp\\n  }\\n}\",\n  \"variables\": {\n    \"conversationId\": \"{{conversation_id}}\",\n    \"password\": \"{{password}}\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Get all messages for a specific conversation (with optional password for private conversations)"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Get Available Ollama Models",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query {\\n  availableModels {\\n    models\\n    count\\n  }\\n}\"\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Get list of available Ollama models"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Create Public Conversation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation CreateConversation($input: CreateConversationInput!) {\\n  createConversation(input: $input) {\\n    message\\n    conversation {\\n      id\\n      tabName\\n      llmModel\\n      isPrivate\\n      createdAt\\n      updatedAt\\n      messageCount\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"id\": \"new-conversation-456\",\n      \"tabName\": \"My New Chat\",\n      \"llmModel\": \"llama3.1:8b\"\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Create a new public conversation"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Create Private Conversation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation CreatePrivateConversation($input: CreateConversationInput!) {\\n  createConversation(input: $input) {\\n    message\\n    conversation {\\n      id\\n      tabName\\n      llmModel\\n      isPrivate\\n      createdAt\\n      updatedAt\\n      messageCount\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"id\": \"private-conversation-789\",\n      \"tabName\": \"Secret Chat\",\n      \"llmModel\": \"llama3.1:70b\",\n      \"password\": \"{{password}}\"\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Create a new private conversation with password protection"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Add User Message (No LLM Response)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation AddUserMessage($input: AddMessageInput!) {\\n  addMessage(input: $input) {\\n    message\\n    userMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmMessage\\n    llmModel\\n    error\\n    llmResponseTime\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"{{conversation_id}}\",\n      \"text\": \"This is a user message without LLM response\",\n      \"sender\": \"user\"\\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Add a user message to a conversation (no LLM response will be generated)"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Add User Message with LLM Response",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation AddMessageWithLLM($input: AddMessageInput!) {\\n  addMessage(input: $input) {\\n    message\\n    userMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmModel\\n    error\\n    llmResponseTime\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"{{conversation_id}}\",\n      \"text\": \"Hello! How are you today?\",\n      \"sender\": \"user\",\n      \"llmModel\": \"llama3.1:8b\"\\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Add a user message and get an LLM response (this will call Ollama)"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Add User Message to Private Conversation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation AddMessageToPrivate($input: AddMessageInput!) {\\n  addMessage(input: $input) {\\n    message\\n    userMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmModel\\n    error\\n    llmResponseTime\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"private-conversation-789\",\n      \"text\": \"This is a secret message\",\n      \"sender\": \"user\",\n      \"password\": \"{{password}}\",\n      \"llmModel\": \"llama3.1:70b\"\\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Add a message to a private conversation using password authentication"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Add LLM Message",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation AddLLMMessage($input: AddMessageInput!) {\\n  addMessage(input: $input) {\\n    message\\n    userMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmMessage\\n    llmModel\\n    error\\n    llmResponseTime\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"{{conversation_id}}\",\n      \"text\": \"This is a direct LLM message\",\n      \"sender\": \"llm\"\\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Add an LLM message directly (no Ollama call, just store the message)"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Verify Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation VerifyPassword($input: VerifyPasswordInput!) {\\n  verifyPassword(input: $input) {\\n    message\\n    conversationId\\n    tabName\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"private-conversation-789\",\n      \"password\": \"{{password}}\"\n    }\\n  }\\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Verify password for a private conversation"
+      },
+      "response": []
+    },
+    {
+      "name": "GraphQL - Warm Up Ollama Service",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation {\\n  warmupOllama {\\n    message\\n    models\\n    count\\n    status\\n  }\\n}\"\n}"
+        },
+        "url": {
+          "raw": "{{graphql_endpoint}}",
+          "host": ["{{graphql_endpoint}}"]
+        },
+        "description": "Warm up the Ollama service to reduce initial latency for future LLM calls"
+      },
+      "response": []
+    }
+  ]
+} 
