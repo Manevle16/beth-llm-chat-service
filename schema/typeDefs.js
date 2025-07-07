@@ -57,6 +57,18 @@ const typeDefs = gql`
     status: String!
   }
 
+  type DeleteConversationResponse {
+    message: String!
+    conversationId: String!
+    success: Boolean!
+  }
+
+  type DeleteMessagesResponse {
+    message: String!
+    deletedCount: Int!
+    success: Boolean!
+  }
+
   input CreateConversationInput {
     id: String!
     tabName: String!
@@ -97,6 +109,12 @@ const typeDefs = gql`
 
     # Add a message to a conversation (with optional LLM response)
     addMessage(input: AddMessageInput!): AddMessageResponse!
+
+    # Delete a conversation
+    deleteConversation(conversationId: String!): DeleteConversationResponse!
+
+    # Delete all messages after a given message in a conversation
+    deleteMessagesAfter(conversationId: ID!, messageId: ID!): DeleteMessagesResponse!
 
     # Verify password for private conversation
     verifyPassword(input: VerifyPasswordInput!): VerifyPasswordResponse!

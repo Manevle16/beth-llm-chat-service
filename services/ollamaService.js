@@ -49,6 +49,26 @@ class OllamaService {
     }
   }
 
+  // NEW: Stream response as async generator
+  async *streamResponse(model, message, conversationHistory = []) {
+    const messages = this.buildConversationContext(conversationHistory, message);
+    // Check Ollama is running
+    try {
+      await this.ollama.list();
+    } catch (connectionError) {
+      throw new Error("Ollama service is not running. Please start Ollama with: ollama serve");
+    }
+    // Stream tokens from Ollama
+    const stream = await this.ollama.chat({
+      model: model,
+      messages: messages,
+      stream: true
+    });
+    for await (const part of stream) {
+      yield part.message.content;
+    }
+  }
+
   buildConversationContext(conversationHistory, currentMessage) {
     const messages = [];
 

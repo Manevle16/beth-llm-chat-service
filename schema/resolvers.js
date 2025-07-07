@@ -433,6 +433,64 @@ const resolvers = {
           status: "error"
         };
       }
+    },
+    deleteConversation: async (_, { conversationId }) => {
+      try {
+        // Delete all messages for the conversation
+        await pool.query("DELETE FROM messages WHERE conversation_id = $1", [conversationId]);
+        // Delete the conversation itself
+        const result = await pool.query("DELETE FROM conversations WHERE id = $1 RETURNING id", [conversationId]);
+        if (result.rowCount === 0) {
+          return {
+            message: "Conversation not found",
+            conversationId,
+            success: false
+          };
+        }
+        return {
+          message: "Conversation deleted successfully",
+          conversationId,
+          success: true
+        };
+      } catch (error) {
+        console.error("Error deleting conversation:", error);
+        return {
+          message: error.message || "Failed to delete conversation",
+          conversationId,
+          success: false
+        };
+      }
+    },
+    deleteMessagesAfter: async (_, { conversationId, messageId }) => {
+      try {
+        // Get the timestamp of the target message in the conversation
+        const msgRes = await pool.query("SELECT timestamp FROM messages WHERE id = $1 AND conversation_id = $2", [
+          messageId,
+          conversationId
+        ]);
+        if (msgRes.rows.length === 0) {
+          return { message: "Message not found", deletedCount: 0, success: false };
+        }
+        const { timestamp } = msgRes.rows[0];
+
+        // Delete all messages in this conversation with timestamp >= this message
+        const delRes = await pool.query("DELETE FROM messages WHERE conversation_id = $1 AND timestamp >= $2", [
+          conversationId,
+          timestamp
+        ]);
+        return {
+          message: `Deleted ${delRes.rowCount} messages`,
+          deletedCount: delRes.rowCount,
+          success: true
+        };
+      } catch (error) {
+        console.error("Error deleting messages after:", error);
+        return {
+          message: error.message || "Failed to delete messages",
+          deletedCount: 0,
+          success: false
+        };
+      }
     }
   },
 

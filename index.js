@@ -8,13 +8,35 @@ require("dotenv").config();
 const typeDefs = require("./schema/typeDefs");
 const resolvers = require("./schema/resolvers");
 const { getSSLOptions, isHTTPSEnabled } = require("./config/ssl");
+const streamRoutes = require("./routes/stream");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
 
+// CORS configuration
+const corsOptions = {
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://localhost:3004",
+    "http://localhost:3005",
+    "https://localhost:3000",
+    "https://localhost:3001",
+    "https://localhost:3002",
+    "https://localhost:3003",
+    "https://localhost:3004",
+    "https://localhost:3005"
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -73,6 +95,9 @@ app.post("/test", (req, res) => {
     headers: req.headers
   });
 });
+
+// API routes
+app.use("/api", streamRoutes);
 
 // Apollo Server setup
 async function startApolloServer() {
