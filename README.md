@@ -1,3 +1,8 @@
+# NONAI PART
+Fully vibe coded
+Just testing out how good cursor is and creating myself my own llm service that handles history and deletions
+similar to chatgpt whenever llm models are cheaper
+
 # Beth LLM Chat Service
 
 A secure chat service API built with GraphQL that supports multiple LLM models with password-protected conversations and automatic LLM responses via Ollama.
