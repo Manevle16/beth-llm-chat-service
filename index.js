@@ -1,14 +1,15 @@
-const express = require("express");
-const { ApolloServer } = require("apollo-server-express");
-const cors = require("cors");
-const https = require("https");
-const http = require("http");
-require("dotenv").config();
+import express from "express";
+import { ApolloServer } from "apollo-server-express";
+import cors from "cors";
+import https from "https";
+import http from "http";
+import dotenv from "dotenv";
+dotenv.config();
 
-const typeDefs = require("./schema/typeDefs");
-const resolvers = require("./schema/resolvers");
-const { getSSLOptions, isHTTPSEnabled } = require("./config/ssl");
-const streamRoutes = require("./routes/stream");
+import typeDefs from "./schema/typeDefs.js";
+import resolvers from "./schema/resolvers.js";
+import { getSSLOptions, isHTTPSEnabled } from "./config/ssl.js";
+import streamRoutes from "./routes/stream.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;

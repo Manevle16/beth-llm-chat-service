@@ -1,7 +1,7 @@
-const express = require("express");
+import express from "express";
+import ollamaService from "../services/ollamaService.js";
+import pool from "../config/database.js";
 const router = express.Router();
-const ollamaService = require("../services/ollamaService");
-const pool = require("../config/database");
 
 // SSE endpoint for streaming LLM responses
 router.post("/stream-message", async (req, res) => {
@@ -82,4 +82,4 @@ router.post("/stream-message", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,6 +1,23 @@
-const { Ollama } = require("ollama");
+import dotenv from "dotenv";
+dotenv.config();
+
+import { Ollama } from "ollama";
+import fetch from "node-fetch";
 
 console.log("🔍 Testing Ollama Connection...\n");
+console.log("OLLAMA_HOST:", process.env.OLLAMA_HOST);
+
+// Direct fetch test
+(async () => {
+  try {
+    const res = await fetch("http://localhost:11434/api/tags");
+    const text = await res.text();
+    console.log("Direct fetch to Ollama API succeeded:");
+    console.log(text);
+  } catch (err) {
+    console.error("Direct fetch to Ollama API failed:", err);
+  }
+})();
 
 const ollama = new Ollama({
   host: process.env.OLLAMA_HOST || "http://localhost:11434"
@@ -48,6 +65,7 @@ async function testOllama() {
     }
   } catch (error) {
     console.error("❌ Ollama connection failed");
+    console.log("OLLAMA_HOST: ", process.env.OLLAMA_HOST || "http://localhost:11434");
     console.error(`   Error: ${error.message}`);
     console.log("\n🔧 Troubleshooting:");
     console.log("   1. Make sure Ollama is installed: https://ollama.ai/download");

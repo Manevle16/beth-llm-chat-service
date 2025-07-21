@@ -5,6 +5,7 @@
   "repository": "https://github.com/Manevle16/beth-llm-chat-service.git",
   "author": "Manevle16 <manevle16@gmail.com>",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "serve": "node index.js",
     "dev": "node index.js",

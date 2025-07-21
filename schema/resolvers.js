@@ -1,6 +1,6 @@
-const bcrypt = require("bcrypt");
-const pool = require("../config/database");
-const ollamaService = require("../services/ollamaService");
+import bcrypt from "bcrypt";
+import pool from "../config/database.js";
+import ollamaService from "../services/ollamaService.js";
 
 const resolvers = {
   Query: {
@@ -535,4 +535,4 @@ const resolvers = {
   }
 };
 
-module.exports = resolvers;
+export default resolvers;

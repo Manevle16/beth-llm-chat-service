@@ -1,4 +1,4 @@
-const { Ollama } = require("ollama");
+import { Ollama } from "ollama";
 
 class OllamaService {
   constructor() {
@@ -110,4 +110,4 @@ class OllamaService {
   }
 }
 
-module.exports = new OllamaService();
+export default new OllamaService();

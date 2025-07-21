@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-const { Pool } = require("pg");
-require("dotenv").config();
+import { Pool } from "pg";
+import dotenv from "dotenv";
+dotenv.config();
 
 // Database configuration
 const dbConfig = {
@@ -225,16 +226,11 @@ async function runAllTests() {
 }
 
 // Handle script execution
-if (require.main === module) {
+if (import.meta.url === path.to.file) {
   runAllTests().catch((error) => {
     console.error("💥 Test script failed:", error);
     process.exit(1);
   });
 }
 
-module.exports = {
-  testDatabaseConnection,
-  testTableExistence,
-  getDatabaseStats,
-  runAllTests
-};
+export { testDatabaseConnection, testTableExistence, getDatabaseStats, runAllTests };

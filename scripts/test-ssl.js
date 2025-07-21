@@ -1,5 +1,6 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
+import { getSSLOptions, isHTTPSEnabled } from "../config/ssl.js";
 
 console.log("🔍 Testing SSL Configuration...\n");
 
@@ -31,7 +32,6 @@ if (fs.existsSync(sslDir)) {
 
       // Test SSL configuration
       console.log("\n🧪 Testing SSL configuration...");
-      const { getSSLOptions, isHTTPSEnabled } = require("../config/ssl");
 
       // Simulate the same conditions as the server
       const originalArgv = process.argv;
