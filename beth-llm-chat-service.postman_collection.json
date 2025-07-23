@@ -103,7 +103,179 @@
           "raw": "{{graphql_endpoint}}",
           "host": ["{{graphql_endpoint}}"]
         },
-        "description": "Get a private conversation using password authentication"
+        "description": "Get a specific private conversation with password authentication"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Upload - Stream Message with Image",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "model",
+              "value": "llava:7b",
+              "type": "text"
+            },
+            {
+              "key": "message",
+              "value": "What do you see in this image?",
+              "type": "text"
+            },
+            {
+              "key": "conversationId",
+              "value": "{{conversation_id}}",
+              "type": "text"
+            },
+            {
+              "key": "images",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/stream-message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "stream-message"]
+        },
+        "description": "Send a message with an image to a vision-capable model (multipart form data)"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Upload - Stream Message (JSON)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"llama3.1:8b\",\n  \"message\": \"Hello, this is a test message\",\n  \"conversationId\": \"{{conversation_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/stream-message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "stream-message"]
+        },
+        "description": "Send a text-only message (JSON format for backward compatibility)"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Get Image by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/{{image_id}}?conversationId={{conversation_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "{{image_id}}"],
+          "query": [
+            {
+              "key": "conversationId",
+              "value": "{{conversation_id}}"
+            }
+          ]
+        },
+        "description": "Retrieve an image by its ID with conversation access control"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Get Image Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/metrics",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "metrics"]
+        },
+        "description": "Get image processing metrics and statistics"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Get Recent Errors",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/errors?limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "errors"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "description": "Get recent image processing errors"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Get Cleanup Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/cleanup/stats",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "cleanup", "stats"]
+        },
+        "description": "Get image cleanup service statistics"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Trigger Cleanup",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/cleanup/trigger",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "cleanup", "trigger"]
+        },
+        "description": "Manually trigger image cleanup process"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Get Storage Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/storage/stats",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "storage", "stats"]
+        },
+        "description": "Get storage statistics and usage information"
+      },
+      "response": []
+    },
+    {
+      "name": "Image Management - Optimize Storage",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/images/storage/optimize",
+          "host": ["{{base_url}}"],
+          "path": ["api", "images", "storage", "optimize"]
+        },
+        "description": "Optimize storage by removing orphaned files"
       },
       "response": []
     },

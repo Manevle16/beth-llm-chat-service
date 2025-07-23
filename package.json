@@ -13,7 +13,12 @@
     "generate-ssl": "node scripts/generate-ssl.js",
     "test-ssl": "node scripts/test-ssl.js",
     "test-ollama": "node scripts/test-ollama.js",
-    "test-database": "node scripts/test-database.js"
+    "test-database": "node scripts/test-database.js",
+    "test-image-database": "node scripts/test-image-database.js",
+    "migrate-images": "node scripts/migrate-image-schema.js",
+    "migrate-images-rollback": "node scripts/migrate-image-schema.js --rollback",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch"
   },
   "dependencies": {
     "apollo-server-express": "^3.12.1",
@@ -21,11 +26,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^5.1.0",
+    "form-data": "^4.0.4",
     "graphql": "^16.8.1",
+    "multer": "^2.0.2",
+    "node-fetch": "^3.3.2",
     "ollama": "^0.4.4",
     "pg": "^8.11.3"
   },
   "devDependencies": {
+    "jest": "^30.0.5",
     "supertest": "^7.1.4"
   }
 }

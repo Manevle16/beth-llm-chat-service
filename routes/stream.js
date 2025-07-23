@@ -3,6 +3,8 @@ import ollamaService from "../services/ollamaService.js";
 import pool from "../config/database.js";
 import streamSessionManager from "../services/streamSessionManager.js";
 import streamSessionDatabase from "../services/streamSessionDatabase.js";
+import imageUploadHandler from "../services/imageUploadHandler.js";
+import { visionModelService } from "../services/visionModelService.js";
 import { 
   TERMINATION_REASON, 
   STREAM_STATUS,
@@ -10,12 +12,13 @@ import {
 } from "../types/streamSession.js";
 const router = express.Router();
 
-// SSE endpoint for streaming LLM responses
+// SSE endpoint for streaming LLM responses (supports both JSON and multipart)
 router.post("/stream-message", async (req, res) => {
   const apiStart = Date.now();
   console.log("[SSE] /api/stream-message called", {
     time: new Date().toISOString(),
-    body: req.body
+    contentType: req.headers['content-type'],
+    hasFiles: !!req.files
   });
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -23,11 +26,97 @@ router.post("/stream-message", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
-  const { model, message, conversationId, password } = req.body;
-  if (!model || !message || !conversationId) {
-    console.log("[SSE] Missing required parameters");
-    res.write(`event: error\ndata: ${JSON.stringify({ error: "Missing model, message, or conversationId" })}\n\n`);
-    return res.end();
+  // Check if this is a multipart request
+  const isMultipart = req.headers['content-type']?.includes('multipart/form-data');
+  
+  let model, message, conversationId, password;
+  let processedImages = [];
+  let validationResult = null;
+
+  if (isMultipart) {
+    // Handle multipart request with images
+    try {
+      // Initialize image upload handler if not already done
+      await imageUploadHandler.initialize();
+      
+      // Use multer middleware to process files
+      const uploadMiddleware = imageUploadHandler.getUploadMiddleware();
+      
+      // Process the upload
+      await new Promise((resolve, reject) => {
+        uploadMiddleware(req, res, (error) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      // Extract form data
+      model = req.body.model;
+      message = req.body.message;
+      conversationId = req.body.conversationId;
+      password = req.body.password;
+
+      if (!model || !message || !conversationId) {
+        console.log("[SSE] Missing required parameters in multipart request");
+        res.write(`event: error\ndata: ${JSON.stringify({ error: "Missing model, message, or conversationId" })}\n\n`);
+        return res.end();
+      }
+
+      // Process uploaded images if any
+      if (req.files && req.files.length > 0) {
+        console.log(`[SSE] Processing ${req.files.length} uploaded images`);
+        
+        // Process images after we save the message (we need the message ID)
+        // For now, just validate them
+        const { images, validationResult: imgValidation } = await imageUploadHandler.processUploadedFiles(
+          req.files, 
+          conversationId, 
+          null // Will be set after message is saved
+        );
+        
+        processedImages = images;
+        validationResult = imgValidation;
+
+        if (!imgValidation.isValid) {
+          console.log("[SSE] Image validation failed:", imgValidation.errors);
+          res.write(`event: error\ndata: ${JSON.stringify({ 
+            error: "Image validation failed", 
+            details: imgValidation.errors 
+          })}\n\n`);
+          return res.end();
+        }
+
+        if (imgValidation.warnings.length > 0) {
+          console.log("[SSE] Image validation warnings:", imgValidation.warnings);
+          res.write(`event: warning\ndata: ${JSON.stringify({ 
+            warnings: imgValidation.warnings 
+          })}\n\n`);
+        }
+      }
+
+    } catch (error) {
+      console.error("[SSE] Error processing multipart request:", error);
+      res.write(`event: error\ndata: ${JSON.stringify({ 
+        error: "Error processing multipart request", 
+        details: error.message 
+      })}\n\n`);
+      return res.end();
+    }
+  } else {
+    // Handle regular JSON request
+    model = req.body.model;
+    message = req.body.message;
+    conversationId = req.body.conversationId;
+    password = req.body.password;
+
+    if (!model || !message || !conversationId) {
+      console.log("[SSE] Missing required parameters");
+      res.write(`event: error\ndata: ${JSON.stringify({ error: "Missing model, message, or conversationId" })}\n\n`);
+      return res.end();
+    }
   }
 
   // Initialize stream session tracking
@@ -68,15 +157,61 @@ router.post("/stream-message", async (req, res) => {
     }
 
     const userMsgStart = Date.now();
-    // Save user message to DB
+    
+    // Determine if message has images
+    const hasImages = processedImages.length > 0;
+    
+    // Save user message to DB with has_images flag
     const userMsgQuery = `
-      INSERT INTO messages (conversation_id, text, sender)
-      VALUES ($1, $2, $3)
-      RETURNING id, conversation_id, text, sender, timestamp
+      INSERT INTO messages (conversation_id, text, sender, has_images)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, conversation_id, text, sender, timestamp, has_images
     `;
-    const userMsgResult = await pool.query(userMsgQuery, [conversationId, message, "user"]);
+    const userMsgResult = await pool.query(userMsgQuery, [conversationId, message, "user", hasImages]);
     const userMessage = userMsgResult.rows[0];
     console.log(`[SSE] User message saved in ${Date.now() - userMsgStart}ms`, userMessage);
+
+    // Process images after message is saved (if any)
+    if (hasImages && req.files && req.files.length > 0) {
+      try {
+        console.log(`[SSE] Processing ${req.files.length} images for message ${userMessage.id}`);
+        
+        // Process images with the actual message ID
+        const { images, validationResult: imgValidation } = await imageUploadHandler.processUploadedFiles(
+          req.files, 
+          conversationId, 
+          userMessage.id
+        );
+        
+        processedImages = images;
+        validationResult = imgValidation;
+
+        if (!imgValidation.isValid) {
+          console.log("[SSE] Image processing failed:", imgValidation.errors);
+          res.write(`event: error\ndata: ${JSON.stringify({ 
+            error: "Image processing failed", 
+            details: imgValidation.errors 
+          })}\n\n`);
+          return res.end();
+        }
+
+        console.log(`[SSE] Successfully processed ${processedImages.length} images`);
+        
+        // Send image processing info to client
+        res.write(`event: images\ndata: ${JSON.stringify({ 
+          processed: processedImages.length,
+          warnings: imgValidation.warnings || []
+        })}\n\n`);
+
+      } catch (error) {
+        console.error("[SSE] Error processing images:", error);
+        res.write(`event: error\ndata: ${JSON.stringify({ 
+          error: "Error processing images", 
+          details: error.message 
+        })}\n\n`);
+        return res.end();
+      }
+    }
 
     const historyStart = Date.now();
     // Fetch conversation history from DB (ordered by timestamp)
@@ -121,7 +256,41 @@ router.post("/stream-message", async (req, res) => {
       }
     };
     
-    for await (const token of ollamaService.streamResponse(model, message, conversationHistory, {}, checkTermination)) {
+    // Prepare the request for Ollama
+    let ollamaRequest = {
+      model,
+      message,
+      conversationHistory,
+      options: {},
+      checkTermination
+    };
+
+    // If we have images and vision is supported, create vision message
+    if (processedImages.length > 0) {
+      try {
+        const visionSupported = await visionModelService.supportsVision(model);
+        
+        if (visionSupported) {
+          const visionMessage = await visionModelService.createVisionMessage(message, processedImages);
+          ollamaRequest.visionMessage = visionMessage;
+          console.log(`[SSE] Using vision message for model ${model}`);
+        } else {
+          console.log(`[SSE] Model ${model} does not support vision, using text-only message`);
+        }
+      } catch (error) {
+        console.error("[SSE] Error creating vision message:", error);
+        // Continue with text-only message
+      }
+    }
+
+    for await (const token of ollamaService.streamResponse(
+      ollamaRequest.model, 
+      ollamaRequest.message, 
+      ollamaRequest.conversationHistory, 
+      ollamaRequest.options, 
+      ollamaRequest.checkTermination,
+      ollamaRequest.visionMessage
+    )) {
       assistantText += token;
       tokenCount++;
       

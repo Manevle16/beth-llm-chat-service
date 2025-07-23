@@ -11,6 +11,10 @@ import {
   ERROR_CODES,
   OPERATIONS
 } from "../types/modelRotation.js";
+import {
+  createImageError,
+  IMAGE_ERRORS
+} from "../types/imageUpload.js";
 import configService from "../config/modelRotation.js";
 
 class ErrorHandlingService {
@@ -662,6 +666,287 @@ class ErrorHandlingService {
     // In a real implementation, this would send metrics to a monitoring system
     // For now, we'll just log it
     this.logDebug(`📊 Metrics: ${operationName} | ${outcome} | ${duration}ms`);
+  }
+
+  // ===== IMAGE PROCESSING ERROR HANDLING =====
+
+  /**
+   * Execute image processing operation with retry logic
+   * @param {Function} operation - Image processing operation
+   * @param {Object} options - Execution options
+   * @returns {Promise<any>} Operation result
+   */
+  async executeImageOperation(operation, options = {}) {
+    const {
+      operationName = 'image_processing',
+      maxRetries = 3,
+      baseDelay = 1000,
+      maxDelay = 10000,
+      enableLogging = true,
+      enableMetrics = true
+    } = options;
+
+    return this.executeWithRetry(operation, {
+      operationName,
+      maxRetries,
+      baseDelay,
+      maxDelay,
+      backoffMultiplier: 2,
+      circuitBreakerThreshold: 3,
+      circuitBreakerTimeout: 30000,
+      enableLogging,
+      enableMetrics
+    });
+  }
+
+  /**
+   * Handle image upload errors with specific recovery strategies
+   * @param {Error} error - Error that occurred
+   * @param {Object} context - Error context
+   * @returns {Object} Error handling result
+   */
+  handleImageUploadError(error, context = {}) {
+    const { imageId, filename, operation } = context;
+    
+    this.logError(`🖼️ Image upload error: ${error.message}`, {
+      imageId,
+      filename,
+      operation,
+      errorCode: error.code || 'UNKNOWN_ERROR'
+    });
+
+    // Create structured error response
+    const imageError = createImageError(
+      this._mapErrorToImageErrorType(error),
+      error.message,
+      {
+        imageId,
+        filename,
+        operation,
+        originalError: error.message
+      }
+    );
+
+    // Record error metrics
+    this._recordError(`image_upload_${operation}`, error);
+
+    return {
+      error: imageError,
+      shouldRetry: this._shouldRetryImageError(error),
+      recoveryAction: this._getImageErrorRecoveryAction(error)
+    };
+  }
+
+  /**
+   * Handle image processing errors
+   * @param {Error} error - Error that occurred
+   * @param {Object} context - Error context
+   * @returns {Object} Error handling result
+   */
+  handleImageProcessingError(error, context = {}) {
+    const { imageId, operation, model } = context;
+    
+    this.logError(`🖼️ Image processing error: ${error.message}`, {
+      imageId,
+      operation,
+      model,
+      errorCode: error.code || 'UNKNOWN_ERROR'
+    });
+
+    const imageError = createImageError(
+      IMAGE_ERRORS.PROCESSING_FAILED,
+      `Image processing failed: ${error.message}`,
+      {
+        imageId,
+        operation,
+        model,
+        originalError: error.message
+      }
+    );
+
+    this._recordError(`image_processing_${operation}`, error);
+
+    return {
+      error: imageError,
+      shouldRetry: this._shouldRetryImageError(error),
+      recoveryAction: this._getImageErrorRecoveryAction(error)
+    };
+  }
+
+  /**
+   * Handle vision model errors
+   * @param {Error} error - Error that occurred
+   * @param {Object} context - Error context
+   * @returns {Object} Error handling result
+   */
+  handleVisionModelError(error, context = {}) {
+    const { model, operation, imageCount } = context;
+    
+    this.logError(`👁️ Vision model error: ${error.message}`, {
+      model,
+      operation,
+      imageCount,
+      errorCode: error.code || 'UNKNOWN_ERROR'
+    });
+
+    const imageError = createImageError(
+      IMAGE_ERRORS.VISION_NOT_SUPPORTED,
+      `Vision processing failed: ${error.message}`,
+      {
+        model,
+        operation,
+        imageCount,
+        originalError: error.message
+      }
+    );
+
+    this._recordError(`vision_model_${operation}`, error);
+
+    return {
+      error: imageError,
+      shouldRetry: this._shouldRetryVisionError(error),
+      recoveryAction: this._getVisionErrorRecoveryAction(error)
+    };
+  }
+
+  /**
+   * Get image processing metrics
+   * @returns {Object} Image processing metrics
+   */
+  getImageProcessingMetrics() {
+    const metrics = {
+      uploads: {
+        total: this._errorCounts.get('image_upload_total') || 0,
+        errors: this._errorCounts.get('image_upload_error') || 0,
+        success: this._errorCounts.get('image_upload_success') || 0
+      },
+      processing: {
+        total: this._errorCounts.get('image_processing_total') || 0,
+        errors: this._errorCounts.get('image_processing_error') || 0,
+        success: this._errorCounts.get('image_processing_success') || 0
+      },
+      vision: {
+        total: this._errorCounts.get('vision_model_total') || 0,
+        errors: this._errorCounts.get('vision_model_error') || 0,
+        success: this._errorCounts.get('vision_model_success') || 0
+      }
+    };
+
+    return {
+      ...metrics,
+      errorRate: this._calculateImageErrorRate(metrics),
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Map general errors to image error types
+   * @param {Error} error - Error to map
+   * @returns {string} Image error type
+   * @private
+   */
+  _mapErrorToImageErrorType(error) {
+    if (error.message.includes('file size')) {
+      return IMAGE_ERRORS.FILE_TOO_LARGE;
+    } else if (error.message.includes('file type') || error.message.includes('mime type')) {
+      return IMAGE_ERRORS.INVALID_FILE_TYPE;
+    } else if (error.message.includes('upload')) {
+      return IMAGE_ERRORS.UPLOAD_FAILED;
+    } else if (error.message.includes('storage')) {
+      return IMAGE_ERRORS.STORAGE_ERROR;
+    } else if (error.message.includes('database')) {
+      return IMAGE_ERRORS.DATABASE_ERROR;
+    } else {
+      return IMAGE_ERRORS.PROCESSING_FAILED;
+    }
+  }
+
+  /**
+   * Check if image error should be retried
+   * @param {Error} error - Error to check
+   * @returns {boolean} True if should retry
+   * @private
+   */
+  _shouldRetryImageError(error) {
+    const retryableErrors = [
+      'timeout',
+      'connection',
+      'network',
+      'temporary',
+      'rate limit'
+    ];
+
+    return retryableErrors.some(keyword => 
+      error.message.toLowerCase().includes(keyword)
+    );
+  }
+
+  /**
+   * Check if vision error should be retried
+   * @param {Error} error - Error to check
+   * @returns {boolean} True if should retry
+   * @private
+   */
+  _shouldRetryVisionError(error) {
+    // Vision errors are usually not retryable as they indicate model limitations
+    return false;
+  }
+
+  /**
+   * Get recovery action for image error
+   * @param {Error} error - Error that occurred
+   * @returns {string} Recovery action
+   * @private
+   */
+  _getImageErrorRecoveryAction(error) {
+    if (error.message.includes('file size')) {
+      return 'reject_upload';
+    } else if (error.message.includes('file type')) {
+      return 'reject_upload';
+    } else if (error.message.includes('storage')) {
+      return 'retry_with_backoff';
+    } else if (error.message.includes('database')) {
+      return 'retry_with_backoff';
+    } else {
+      return 'fallback_to_text';
+    }
+  }
+
+  /**
+   * Get recovery action for vision error
+   * @param {Error} error - Error that occurred
+   * @returns {string} Recovery action
+   * @private
+   */
+  _getVisionErrorRecoveryAction(error) {
+    if (error.message.includes('not supported') || error.message.includes('vision')) {
+      return 'fallback_to_text_only';
+    } else if (error.message.includes('timeout')) {
+      return 'retry_with_backoff';
+    } else {
+      return 'fallback_to_text_only';
+    }
+  }
+
+  /**
+   * Calculate image error rate
+   * @param {Object} metrics - Metrics object
+   * @returns {number} Error rate percentage
+   * @private
+   */
+  _calculateImageErrorRate(metrics) {
+    const totalUploads = metrics.uploads.total;
+    const totalProcessing = metrics.processing.total;
+    const totalVision = metrics.vision.total;
+    
+    const totalOperations = totalUploads + totalProcessing + totalVision;
+    const totalErrors = metrics.uploads.errors + metrics.processing.errors + metrics.vision.errors;
+    
+    if (totalOperations === 0) {
+      return 0;
+    }
+    
+    return Math.round((totalErrors / totalOperations) * 100);
   }
 }
 

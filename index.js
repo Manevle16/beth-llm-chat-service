@@ -10,9 +10,12 @@ import typeDefs from "./schema/typeDefs.js";
 import resolvers from "./schema/resolvers.js";
 import { getSSLOptions, isHTTPSEnabled } from "./config/ssl.js";
 import streamRoutes from "./routes/stream.js";
+import imageRoutes from "./routes/images.js";
 import streamSessionManager from "./services/streamSessionManager.js";
 import streamSessionDatabase from "./services/streamSessionDatabase.js";
 import ollamaService from "./services/ollamaService.js";
+import imageUploadHandler from "./services/imageUploadHandler.js";
+import imageCleanupService from "./services/imageCleanupService.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -102,6 +105,7 @@ app.post("/test", (req, res) => {
 
 // API routes
 app.use("/api", streamRoutes);
+app.use("/api/images", imageRoutes);
 
 // Service initialization
 async function initializeServices() {
@@ -114,6 +118,20 @@ async function initializeServices() {
     
     // Initialize Ollama service (this will also initialize model rotation if enabled)
     await ollamaService.initialize();
+    
+    // Initialize image upload handler if enabled
+    if (process.env.IMAGE_UPLOAD_ENABLED === 'true') {
+      console.log("🖼️  Initializing image upload handler...");
+      await imageUploadHandler.initialize();
+      console.log("✅ Image upload handler initialized");
+      
+      // Initialize image cleanup service
+      console.log("🧹 Initializing image cleanup service...");
+      await imageCleanupService.initialize();
+      console.log("✅ Image cleanup service initialized");
+    } else {
+      console.log("⚠️  Image upload is disabled (IMAGE_UPLOAD_ENABLED=false)");
+    }
     
     // Clean up any orphaned sessions from previous server runs
     console.log("🧹 Cleaning up orphaned sessions from previous runs...");
@@ -146,6 +164,13 @@ async function gracefulShutdown(signal) {
     console.log("🔄 Shutting down Stream Session Manager...");
     await streamSessionManager.shutdown();
     console.log("✅ Stream Session Manager shutdown complete");
+    
+    // Shutdown image cleanup service if enabled
+    if (process.env.IMAGE_UPLOAD_ENABLED === 'true' && imageCleanupService.isInitialized()) {
+      console.log("🔄 Shutting down Image Cleanup Service...");
+      await imageCleanupService.shutdown();
+      console.log("✅ Image Cleanup Service shutdown complete");
+    }
     
     // Note: Other services don't have explicit shutdown methods yet
     // They will be cleaned up by the process exit
