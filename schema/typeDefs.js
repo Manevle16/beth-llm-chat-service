@@ -69,6 +69,17 @@ const typeDefs = gql`
     success: Boolean!
   }
 
+  type TerminateStreamResponse {
+    success: Boolean!
+    sessionId: String!
+    message: String!
+    partialResponse: String!
+    tokenCount: Int!
+    finalStatus: String!
+    terminationReason: String
+    error: String
+  }
+
   input CreateConversationInput {
     id: String!
     tabName: String!
@@ -87,6 +98,13 @@ const typeDefs = gql`
   input VerifyPasswordInput {
     conversationId: String!
     password: String!
+  }
+
+  input TerminateStreamInput {
+    sessionId: String!
+    conversationId: String!
+    password: String
+    reason: String
   }
 
   type Query {
@@ -121,6 +139,9 @@ const typeDefs = gql`
 
     # Warm up Ollama service to reduce initial latency
     warmupOllama: WarmupOllamaResponse!
+
+    # Terminate an active streaming session
+    terminateStream(input: TerminateStreamInput!): TerminateStreamResponse!
   }
 `;
 

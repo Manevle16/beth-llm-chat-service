@@ -28,6 +28,31 @@ CREATE INDEX idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX idx_conversations_updated_at ON conversations(updated_at);
 CREATE INDEX idx_conversations_is_private ON conversations(is_private);
 
+-- Stream Sessions table - stores active streaming sessions
+CREATE TABLE stream_sessions (
+    id VARCHAR(255) PRIMARY KEY,
+    conversation_id VARCHAR(255) NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    model VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('ACTIVE', 'COMPLETED', 'TERMINATED', 'ERROR')),
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP WITH TIME ZONE,
+    partial_response TEXT DEFAULT '',
+    token_count INTEGER DEFAULT 0,
+    termination_reason VARCHAR(30) CHECK (termination_reason IN ('USER_REQUESTED', 'TIMEOUT', 'ERROR', 'SERVER_SHUTDOWN')),
+    error_message TEXT,
+    timeout_ms INTEGER DEFAULT 300000,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for stream sessions
+CREATE INDEX idx_stream_sessions_conversation_id ON stream_sessions(conversation_id);
+CREATE INDEX idx_stream_sessions_status ON stream_sessions(status);
+CREATE INDEX idx_stream_sessions_started_at ON stream_sessions(started_at);
+CREATE INDEX idx_stream_sessions_updated_at ON stream_sessions(updated_at);
+CREATE INDEX idx_stream_sessions_ended_at ON stream_sessions(ended_at);
+CREATE INDEX idx_stream_sessions_expired ON stream_sessions(started_at) WHERE status = 'ACTIVE';
+
 -- Trigger to update the updated_at timestamp when messages are added
 CREATE OR REPLACE FUNCTION update_conversation_timestamp()
 RETURNS TRIGGER AS $$

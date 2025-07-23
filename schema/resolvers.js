@@ -1,6 +1,9 @@
 import bcrypt from "bcrypt";
 import pool from "../config/database.js";
 import ollamaService from "../services/ollamaService.js";
+import streamSessionDatabase from "../services/streamSessionDatabase.js";
+import streamSessionManager from "../services/streamSessionManager.js";
+import { TERMINATION_REASON } from "../types/streamSession.js";
 
 const resolvers = {
   Query: {
@@ -489,6 +492,209 @@ const resolvers = {
           message: error.message || "Failed to delete messages",
           deletedCount: 0,
           success: false
+        };
+      }
+    },
+
+    // Terminate an active streaming session
+    terminateStream: async (_, { input }) => {
+      try {
+        const { sessionId, conversationId, password, reason } = input;
+
+        console.log("[GraphQL] terminateStream called", {
+          sessionId,
+          conversationId,
+          hasPassword: !!password,
+          reason
+        });
+
+        // Validate required parameters
+        if (!sessionId || !conversationId) {
+          return {
+            success: false,
+            sessionId: sessionId || "unknown",
+            message: "Session ID and conversation ID are required",
+            partialResponse: "",
+            tokenCount: 0,
+            finalStatus: "ERROR",
+            terminationReason: TERMINATION_REASON.ERROR,
+            error: "Missing required parameters"
+          };
+        }
+
+        // Validate conversation access permissions
+        const conversationQuery = `
+          SELECT id, is_private, password_hash
+          FROM conversations
+          WHERE id = $1
+        `;
+        const conversationResult = await pool.query(conversationQuery, [conversationId]);
+        
+        if (conversationResult.rows.length === 0) {
+          return {
+            success: false,
+            sessionId,
+            message: "Conversation not found",
+            partialResponse: "",
+            tokenCount: 0,
+            finalStatus: "ERROR",
+            terminationReason: TERMINATION_REASON.ERROR,
+            error: "Conversation not found"
+          };
+        }
+
+        const conversation = conversationResult.rows[0];
+
+        // Check if conversation is private and password is required
+        if (conversation.is_private) {
+          if (!password) {
+            return {
+              success: false,
+              sessionId,
+              message: "Password required for private conversation",
+              partialResponse: "",
+              tokenCount: 0,
+              finalStatus: "ERROR",
+              terminationReason: TERMINATION_REASON.ERROR,
+              error: "Password required for private conversation"
+            };
+          }
+
+          // Verify password
+          const isValidPassword = await bcrypt.compare(password, conversation.password_hash);
+          if (!isValidPassword) {
+            return {
+              success: false,
+              sessionId,
+              message: "Invalid password for private conversation",
+              partialResponse: "",
+              tokenCount: 0,
+              finalStatus: "ERROR",
+              terminationReason: TERMINATION_REASON.ERROR,
+              error: "Invalid password"
+            };
+          }
+        }
+
+        // Get session from database
+        const session = await streamSessionDatabase.getSession(sessionId);
+        if (!session) {
+          return {
+            success: false,
+            sessionId,
+            message: "Stream session not found",
+            partialResponse: "",
+            tokenCount: 0,
+            finalStatus: "ERROR",
+            terminationReason: TERMINATION_REASON.ERROR,
+            error: "Session not found"
+          };
+        }
+
+        // Verify session belongs to the specified conversation
+        if (session.conversationId !== conversationId) {
+          return {
+            success: false,
+            sessionId,
+            message: "Session does not belong to the specified conversation",
+            partialResponse: "",
+            tokenCount: 0,
+            finalStatus: "ERROR",
+            terminationReason: TERMINATION_REASON.ERROR,
+            error: "Session conversation mismatch"
+          };
+        }
+
+        // Check if session is in a terminable state
+        if (session.status !== 'ACTIVE') {
+          return {
+            success: false,
+            sessionId,
+            message: `Session is in ${session.status} state and cannot be terminated`,
+            partialResponse: session.partialResponse || "",
+            tokenCount: session.tokenCount || 0,
+            finalStatus: session.status,
+            terminationReason: session.terminationReason || TERMINATION_REASON.USER_REQUESTED,
+            error: "Session not in terminable state"
+          };
+        }
+
+        // Determine termination reason
+        const terminationReason = reason || TERMINATION_REASON.USER_REQUESTED;
+
+        // Terminate the session in the database
+        const terminatedSession = await streamSessionDatabase.terminateSession(
+          sessionId,
+          terminationReason
+        );
+
+        if (!terminatedSession) {
+          return {
+            success: false,
+            sessionId,
+            message: "Failed to terminate session in database",
+            partialResponse: "",
+            tokenCount: 0,
+            finalStatus: "ERROR",
+            terminationReason: TERMINATION_REASON.ERROR,
+            error: "Database termination failed"
+          };
+        }
+
+        // Save partial response as a message in the conversation
+        let savedMessageId = null;
+        if (terminatedSession.partialResponse && terminatedSession.partialResponse.trim()) {
+          try {
+            const savedMessage = await streamSessionDatabase.savePartialResponseAsMessage(
+              sessionId,
+              conversationId,
+              terminatedSession.partialResponse
+            );
+            savedMessageId = savedMessage.id;
+            console.log("[GraphQL] Partial response saved as message:", savedMessageId);
+          } catch (error) {
+            console.error("[GraphQL] Failed to save partial response:", error.message);
+            // Don't fail the termination if message saving fails
+          }
+        }
+
+        // Terminate the session in the session manager (if it exists in memory)
+        try {
+          streamSessionManager.terminateSession(sessionId, terminationReason);
+        } catch (error) {
+          console.log("[GraphQL] Session not found in memory manager (non-critical):", error.message);
+        }
+
+        console.log("[GraphQL] Stream termination successful:", {
+          sessionId,
+          conversationId,
+          tokenCount: terminatedSession.tokenCount,
+          responseLength: terminatedSession.partialResponse.length,
+          terminationReason
+        });
+
+        return {
+          success: true,
+          sessionId: sessionId,
+          message: "Stream terminated successfully",
+          partialResponse: terminatedSession.partialResponse || "",
+          tokenCount: terminatedSession.tokenCount || 0,
+          finalStatus: terminatedSession.status,
+          terminationReason: terminationReason,
+          error: null
+        };
+
+      } catch (error) {
+        console.error("[GraphQL] Error in terminateStream:", error);
+        return {
+          success: false,
+          sessionId: input?.sessionId || "unknown",
+          message: "An error occurred while terminating the stream",
+          partialResponse: "",
+          tokenCount: 0,
+          finalStatus: "ERROR",
+          terminationReason: TERMINATION_REASON.ERROR,
+          error: error.message || "Internal server error"
         };
       }
     }

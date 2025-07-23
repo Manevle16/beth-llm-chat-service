@@ -320,6 +320,7 @@ The service uses two main tables:
 
 ## Environment Variables
 
+### Database Configuration
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DB_USER` | PostgreSQL username | `postgres` |
@@ -327,8 +328,67 @@ The service uses two main tables:
 | `DB_NAME` | Database name | `beth_chat_service` |
 | `DB_PASSWORD` | Database password | `` |
 | `DB_PORT` | Database port | `5432` |
-| `PORT` | Server port | `3000` |
+
+### Server Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | HTTP server port | `3000` |
+| `HTTPS_PORT` | HTTPS server port | `3443` |
+
+### HTTPS Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FORCE_HTTPS` | Force HTTPS redirects | `false` |
+| `SSL_KEY_PATH` | Path to SSL private key file | `/path/to/your/private-key.pem` |
+| `SSL_CERT_PATH` | Path to SSL certificate file | `/path/to/your/certificate.pem` |
+
+### Ollama Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `OLLAMA_HOST` | Ollama service URL | `http://localhost:11434` |
+
+### Model Rotation Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MODEL_ROTATION_ENABLED` | Enable automatic model rotation | `true` |
+| `MAX_CONCURRENT_MODELS` | Maximum models loaded simultaneously | `1` |
+| `ROTATION_TIMEOUT_MS` | Timeout for model rotation operations (ms) | `30000` |
+| `ROTATION_RETRY_ATTEMPTS` | Number of retry attempts for failed rotations | `3` |
+| `ROTATION_RETRY_DELAY_MS` | Delay between retry attempts (ms) | `1000` |
+
+### Memory Monitoring Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MEMORY_WARNING_THRESHOLD` | Memory usage percentage for warnings | `70` |
+| `MEMORY_CRITICAL_THRESHOLD` | Memory usage percentage for critical alerts | `85` |
+| `MEMORY_CLEANUP_THRESHOLD` | Memory usage percentage to trigger cleanup | `90` |
+| `MEMORY_MONITORING_ENABLED` | Enable memory monitoring | `true` |
+
+### Queue Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_QUEUE_SIZE` | Maximum rotation requests in queue | `10` |
+| `QUEUE_PROCESSING_INTERVAL_MS` | Queue processing interval (ms) | `1000` |
+
+### Error Handling and Observability Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CIRCUIT_BREAKER_THRESHOLD` | Failed operations before circuit breaker opens | `5` |
+| `CIRCUIT_BREAKER_TIMEOUT_MS` | Circuit breaker timeout duration (ms) | `60000` |
+| `ERROR_RETRY_BASE_DELAY_MS` | Base delay for exponential backoff (ms) | `1000` |
+| `ERROR_RETRY_MAX_DELAY_MS` | Maximum retry delay (ms) | `30000` |
+| `ERROR_RETRY_BACKOFF_MULTIPLIER` | Multiplier for exponential backoff | `2` |
+| `LOG_BUFFER_MAX_SIZE` | Maximum log entries in memory buffer | `1000` |
+
+### Advanced Rotation Features
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENABLE_ROTATION_HISTORY` | Track rotation history | `true` |
+| `ROTATION_HISTORY_MAX_ENTRIES` | Maximum rotation history entries | `100` |
+| `ENABLE_FAILED_ROTATION_TRACKING` | Track failed rotation attempts | `true` |
+| `FAILED_ROTATION_MAX_ENTRIES` | Maximum failed rotation entries | `50` |
+| `ENABLE_MEMORY_TREND_ANALYSIS` | Enable memory trend analysis | `true` |
+| `MEMORY_TREND_WINDOW_MINUTES` | Time window for memory trend analysis | `30` |
 
 ## Ollama Setup
 

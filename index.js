@@ -10,6 +10,9 @@ import typeDefs from "./schema/typeDefs.js";
 import resolvers from "./schema/resolvers.js";
 import { getSSLOptions, isHTTPSEnabled } from "./config/ssl.js";
 import streamRoutes from "./routes/stream.js";
+import streamSessionManager from "./services/streamSessionManager.js";
+import streamSessionDatabase from "./services/streamSessionDatabase.js";
+import ollamaService from "./services/ollamaService.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -100,6 +103,65 @@ app.post("/test", (req, res) => {
 // API routes
 app.use("/api", streamRoutes);
 
+// Service initialization
+async function initializeServices() {
+  try {
+    console.log("🔧 Initializing services...");
+    
+    // Initialize stream session services
+    await streamSessionDatabase.initialize();
+    await streamSessionManager.initialize();
+    
+    // Initialize Ollama service (this will also initialize model rotation if enabled)
+    await ollamaService.initialize();
+    
+    // Clean up any orphaned sessions from previous server runs
+    console.log("🧹 Cleaning up orphaned sessions from previous runs...");
+    try {
+      const orphanedSessions = await streamSessionDatabase.getExpiredSessions();
+      if (orphanedSessions.length > 0) {
+        console.log(`📊 Found ${orphanedSessions.length} orphaned sessions, cleaning up...`);
+        await streamSessionDatabase.cleanupExpiredSessions();
+        console.log("✅ Orphaned sessions cleaned up successfully");
+      } else {
+        console.log("✅ No orphaned sessions found");
+      }
+    } catch (cleanupError) {
+      console.warn("⚠️  Session cleanup failed (non-critical):", cleanupError.message);
+    }
+    
+    console.log("✅ All services initialized successfully");
+  } catch (error) {
+    console.error("❌ Failed to initialize services:", error);
+    throw error;
+  }
+}
+
+// Graceful shutdown handler
+async function gracefulShutdown(signal) {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  
+  try {
+    // Shutdown stream session manager (this will terminate all active sessions)
+    console.log("🔄 Shutting down Stream Session Manager...");
+    await streamSessionManager.shutdown();
+    console.log("✅ Stream Session Manager shutdown complete");
+    
+    // Note: Other services don't have explicit shutdown methods yet
+    // They will be cleaned up by the process exit
+    
+    console.log("✅ Graceful shutdown completed");
+    process.exit(0);
+  } catch (error) {
+    console.error("❌ Error during graceful shutdown:", error);
+    process.exit(1);
+  }
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // Apollo Server setup
 async function startApolloServer() {
   try {
@@ -177,6 +239,9 @@ async function startApolloServer() {
       console.log(`❌ 404 - Endpoint not found: ${req.method} ${req.url}`);
       res.status(404).json({ error: "Endpoint not found" });
     });
+
+    // Initialize all services before starting the server
+    await initializeServices();
 
     // Start server based on configuration
     const httpsEnabled = isHTTPSEnabled();
