@@ -148,12 +148,31 @@ try {
   const messages = ollamaService.buildConversationContext(history, 'I am fine');
   console.log('✅ BuildConversationContext:', {
     messageCount: messages.length,
+    hasSystemMessage: messages.some(m => m.role === 'system'),
     hasUserMessages: messages.some(m => m.role === 'user'),
     hasAssistantMessages: messages.some(m => m.role === 'assistant'),
-    lastMessage: messages[messages.length - 1]?.content
+    lastMessage: messages[messages.length - 1]?.content,
+    systemMessage: messages.find(m => m.role === 'system')?.content
   });
 } catch (error) {
   console.log('❌ BuildConversationContext failed:', error.message);
+}
+
+// Test 9.1: Test buildConversationContext for new conversation
+console.log('\n9️⃣.1️⃣  Testing buildConversationContext for new conversation...');
+try {
+  const emptyHistory = [];
+  const messages = ollamaService.buildConversationContext(emptyHistory, 'Hello, this is my first message');
+  console.log('✅ BuildConversationContext (new conversation):', {
+    messageCount: messages.length,
+    hasSystemMessage: messages.some(m => m.role === 'system'),
+    hasUserMessages: messages.some(m => m.role === 'user'),
+    hasAssistantMessages: messages.some(m => m.role === 'assistant'),
+    systemMessage: messages.find(m => m.role === 'system')?.content,
+    isNewConversationMessage: messages.find(m => m.role === 'system')?.content.includes('new conversation')
+  });
+} catch (error) {
+  console.log('❌ BuildConversationContext (new conversation) failed:', error.message);
 }
 
 // Test 10: Test rotation history

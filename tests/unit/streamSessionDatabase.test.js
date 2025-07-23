@@ -74,7 +74,7 @@ try {
 // Test 5: Create multiple sessions
 console.log('\n5️⃣  Testing multiple sessions...');
 const session2 = createStreamSession('conv-db-test-456', 'mistral:7b');
-const session3 = createStreamSession('conv-db-test-123', 'qwen:7b'); // Same conversation
+const session3 = createStreamSession('conv-db-test-123', 'llama3.1:8b'); // Same conversation
 try {
   await streamSessionDatabase.createSession(session2);
   await streamSessionDatabase.createSession(session3);

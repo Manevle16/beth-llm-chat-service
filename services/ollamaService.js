@@ -2,6 +2,7 @@ import { Ollama } from "ollama";
 import modelRotationService from "./modelRotationService.js";
 import configService from "../config/modelRotation.js";
 import { REQUEST_PRIORITY } from "../types/modelRotation.js";
+import { systemPrompt } from "../config/prompts.js";
 
 class OllamaService {
   constructor() {
@@ -68,14 +69,14 @@ class OllamaService {
       // Handle model rotation if enabled
       if (this._rotationEnabled && enableRotation) {
         console.log(`🔄 Checking model rotation for: ${model}`);
-        
+
         try {
           const rotationResult = await modelRotationService.requestModelRotation(
-            model, 
-            'generateResponse', 
+            model,
+            'generateResponse',
             rotationPriority
           );
-          
+
           if (rotationResult.action === 'rotated') {
             console.log(`✅ Model rotated to ${model} in ${rotationResult.duration}ms`);
           } else if (rotationResult.action === 'queued') {
@@ -90,7 +91,7 @@ class OllamaService {
       }
 
       // Build the conversation context
-      const messages = this.buildConversationContext(conversationHistory, message);
+      const messages = this.buildConversationContext(conversationHistory, message, model);
 
       console.log(`🤖 Sending request to Ollama model: ${model}`);
       console.log(`📝 Message: ${message}`);
@@ -147,14 +148,14 @@ class OllamaService {
       // Handle model rotation if enabled (higher priority for streaming)
       if (this._rotationEnabled && enableRotation) {
         console.log(`🔄 Checking model rotation for streaming: ${model}`);
-        
+
         try {
           const rotationResult = await modelRotationService.requestModelRotation(
-            model, 
-            'streamResponse', 
+            model,
+            'streamResponse',
             rotationPriority
           );
-          
+
           if (rotationResult.action === 'rotated') {
             console.log(`✅ Model rotated to ${model} for streaming in ${rotationResult.duration}ms`);
           } else if (rotationResult.action === 'queued') {
@@ -168,22 +169,22 @@ class OllamaService {
         }
       }
 
-      const messages = this.buildConversationContext(conversationHistory, message);
-      
+      const messages = this.buildConversationContext(conversationHistory, message, model);
+
       // Check Ollama is running
       try {
         await this.ollama.list();
       } catch (connectionError) {
         throw new Error("Ollama service is not running. Please start Ollama with: ollama serve");
       }
-      
+
       // Stream tokens from Ollama
       const stream = await this.ollama.chat({
         model: model,
         messages: messages,
         stream: true
       });
-      
+
       for await (const part of stream) {
         // Check for termination if callback provided
         if (terminationCheck && typeof terminationCheck === 'function') {
@@ -198,12 +199,12 @@ class OllamaService {
             // Continue streaming if termination check fails
           }
         }
-        
+
         yield part.message.content;
       }
     } catch (error) {
       console.error(`❌ Error streaming from Ollama API for model ${model}:`, error);
-      
+
       // Handle specific Ollama errors
       if (error.message.includes("model not found")) {
         throw new Error(`LLM model '${model}' not found. Please ensure it's installed in Ollama.`);
@@ -219,10 +220,25 @@ class OllamaService {
    * Build conversation context from history and current message
    * @param {Array} conversationHistory - Conversation history
    * @param {string} currentMessage - Current user message
+   * @param {string} model - Model name to use (for special prompt handling)
    * @returns {Array} Formatted messages for Ollama
    */
-  buildConversationContext(conversationHistory, currentMessage) {
+  buildConversationContext(conversationHistory, currentMessage, model) {
     const messages = [];
+
+    // Add system prompt for markdown responses and new conversation detection
+    const isNewConversation = conversationHistory.length === 0;
+
+    let promptText = systemPrompt;
+    // If model is 'qwen3:32b' and new conversation, prepend '/no_think '
+    if (model === 'qwen3:32b') {
+      promptText = '/no_think ' + promptText;
+    }
+    messages.push({
+      role: "system",
+      content: promptText
+    });
+
 
     // Add conversation history
     conversationHistory.forEach((msg) => {
@@ -276,7 +292,7 @@ class OllamaService {
    */
   async getRotationStatus() {
     await this._ensureInitialized();
-    
+
     if (!this._rotationEnabled) {
       return {
         enabled: false,
@@ -306,7 +322,7 @@ class OllamaService {
    */
   async forceModelRotation(targetModel, source) {
     await this._ensureInitialized();
-    
+
     if (!this._rotationEnabled) {
       throw new Error("Model rotation is disabled");
     }
@@ -326,7 +342,7 @@ class OllamaService {
    */
   async getRotationHistory(limit = 10) {
     await this._ensureInitialized();
-    
+
     if (!this._rotationEnabled) {
       return [];
     }
@@ -345,7 +361,7 @@ class OllamaService {
    */
   async getFailedRotations() {
     await this._ensureInitialized();
-    
+
     if (!this._rotationEnabled) {
       return [];
     }
@@ -364,7 +380,7 @@ class OllamaService {
    */
   async emergencyCleanup() {
     await this._ensureInitialized();
-    
+
     if (!this._rotationEnabled) {
       return {
         success: true,

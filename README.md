@@ -397,7 +397,7 @@ The service uses two main tables:
 ```bash
 # Pull popular models
 ollama pull llama3.1:8b
-ollama pull llama3.1:70b
+ollama pull llama3.1:8b
 ollama pull codellama:7b
 ollama pull mistral:7b
 
@@ -409,7 +409,7 @@ ollama list
 
 The service works with any Ollama model. Common model names:
 - `llama3.1:8b` - Fast, good for general chat
-- `llama3.1:70b` - More capable, slower
+- `llama3.1:8b` - Good balance of capability and speed
 - `codellama:7b` - Specialized for code
 - `mistral:7b` - Good balance of speed/quality
 

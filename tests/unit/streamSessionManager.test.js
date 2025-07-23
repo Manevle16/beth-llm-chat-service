@@ -61,7 +61,7 @@ console.log('✅ Updated session:', {
 // Test 6: Create multiple sessions
 console.log('\n6️⃣  Testing multiple sessions...');
 const session2 = await streamSessionManager.createSession('conv-456', 'mistral:7b');
-const session3 = await streamSessionManager.createSession('conv-123', 'qwen:7b'); // Same conversation
+const session3 = await streamSessionManager.createSession('conv-123', 'llama3.1:8b'); // Same conversation
 console.log('✅ Created multiple sessions:', {
   session2Id: session2.id,
   session3Id: session3.id,

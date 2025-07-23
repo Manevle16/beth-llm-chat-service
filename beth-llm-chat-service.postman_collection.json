@@ -185,7 +185,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"query\": \"mutation CreatePrivateConversation($input: CreateConversationInput!) {\\n  createConversation(input: $input) {\\n    message\\n    conversation {\\n      id\\n      tabName\\n      llmModel\\n      isPrivate\\n      createdAt\\n      updatedAt\\n      messageCount\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"id\": \"private-conversation-789\",\n      \"tabName\": \"Secret Chat\",\n      \"llmModel\": \"llama3.1:70b\",\n      \"password\": \"{{password}}\"\n    }\\n  }\\n}"
+          "raw": "{\n  \"query\": \"mutation CreatePrivateConversation($input: CreateConversationInput!) {\\n  createConversation(input: $input) {\\n    message\\n    conversation {\\n      id\\n      tabName\\n      llmModel\\n      isPrivate\\n      createdAt\\n      updatedAt\\n      messageCount\\n    }\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"id\": \"private-conversation-789\",\n      \"tabName\": \"Secret Chat\",\n      \"llmModel\": \"llama3.1:8b\",\n      \"password\": \"{{password}}\"\n    }\\n  }\\n}"
         },
         "url": {
           "raw": "{{graphql_endpoint}}",
@@ -251,7 +251,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"query\": \"mutation AddMessageToPrivate($input: AddMessageInput!) {\\n  addMessage(input: $input) {\\n    message\\n    userMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmModel\\n    error\\n    llmResponseTime\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"private-conversation-789\",\n      \"text\": \"This is a secret message\",\n      \"sender\": \"user\",\n      \"password\": \"{{password}}\",\n      \"llmModel\": \"llama3.1:70b\"\\n    }\\n  }\\n}"
+          "raw": "{\n  \"query\": \"mutation AddMessageToPrivate($input: AddMessageInput!) {\\n  addMessage(input: $input) {\\n    message\\n    userMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmMessage {\\n      id\\n      conversationId\\n      text\\n      sender\\n      timestamp\\n    }\\n    llmModel\\n    error\\n    llmResponseTime\\n  }\\n}\",\n  \"variables\": {\n    \"input\": {\n      \"conversationId\": \"private-conversation-789\",\n      \"text\": \"This is a secret message\",\n      \"sender\": \"user\",\n      \"password\": \"{{password}}\",\n      \"llmModel\": \"llama3.1:8b\"\\n    }\\n  }\\n}"
         },
         "url": {
           "raw": "{{graphql_endpoint}}",

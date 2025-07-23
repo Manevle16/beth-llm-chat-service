@@ -20,7 +20,7 @@ import { REQUEST_PRIORITY, ERROR_CODES } from '../../types/modelRotation.js';
 
 // Test configuration
 const TEST_CONFIG = {
-  testModels: ['mistral:7b', 'qwen3:32b', 'ALIENTELLIGENCE/attorney2:latest'],
+  testModels: ['mistral:7b', 'llama3.1:8b', 'ALIENTELLIGENCE/attorney2:latest'],
   testTimeout: 30000,
   concurrentRequests: 5,
   memoryThresholdTest: {
