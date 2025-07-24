@@ -19,6 +19,7 @@ const typeDefs = gql`
     mimeType: String!
     contentHash: String!
     createdAt: String!
+    url: String!
   }
 
   type Message {
