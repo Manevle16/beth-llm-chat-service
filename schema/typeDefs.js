@@ -12,12 +12,23 @@ const typeDefs = gql`
     messageCount: Int!
   }
 
+  type Image {
+    id: ID!
+    filename: String!
+    fileSize: Int!
+    mimeType: String!
+    contentHash: String!
+    createdAt: String!
+  }
+
   type Message {
     id: ID!
     conversationId: String!
     text: String!
     sender: String!
     timestamp: String!
+    hasImages: Boolean!
+    images: [Image!]!
   }
 
   type ConversationList {

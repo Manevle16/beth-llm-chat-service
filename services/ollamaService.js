@@ -139,7 +139,7 @@ class OllamaService {
    * @param {Function} terminationCheck - Optional function to check for termination
    * @returns {AsyncGenerator<string>} Streamed response tokens
    */
-  async *streamResponse(model, message, conversationHistory = [], options = {}, terminationCheck = null) {
+  async *streamResponse(model, message, conversationHistory = [], options = {}, terminationCheck = null, visionMessage = null) {
     await this._ensureInitialized();
 
     const { enableRotation = true, rotationPriority = REQUEST_PRIORITY.HIGH } = options;
@@ -169,7 +169,7 @@ class OllamaService {
         }
       }
 
-      const messages = this.buildConversationContext(conversationHistory, message, model);
+      const messages = this.buildConversationContext(conversationHistory, message, model, visionMessage);
 
       // Check Ollama is running
       try {
@@ -223,7 +223,7 @@ class OllamaService {
    * @param {string} model - Model name to use (for special prompt handling)
    * @returns {Array} Formatted messages for Ollama
    */
-  buildConversationContext(conversationHistory, currentMessage, model) {
+  buildConversationContext(conversationHistory, currentMessage, model, visionMessage = null) {
     const messages = [];
 
     // Add system prompt for markdown responses and new conversation detection
@@ -248,11 +248,18 @@ class OllamaService {
       });
     });
 
-    // Add current user message
-    messages.push({
+    // Add current user message with images if available
+    const userMessage = {
       role: "user",
       content: currentMessage
-    });
+    };
+
+          // Add images to the user message if vision message is provided
+      if (visionMessage && Array.isArray(visionMessage) && visionMessage.length > 0) {
+        userMessage.images = visionMessage.map(msg => msg.image_url);
+      }
+
+    messages.push(userMessage);
 
     return messages;
   }

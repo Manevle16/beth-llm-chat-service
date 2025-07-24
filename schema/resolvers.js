@@ -71,7 +71,7 @@ const resolvers = {
 
         // Get messages for this conversation
         const messagesQuery = `
-          SELECT id, conversation_id, text, sender, timestamp
+          SELECT id, conversation_id, text, sender, timestamp, has_images
           FROM messages 
           WHERE conversation_id = $1
           ORDER BY timestamp ASC
@@ -91,7 +91,8 @@ const resolvers = {
             conversationId: row.conversation_id,
             text: row.text,
             sender: row.sender,
-            timestamp: row.timestamp
+            timestamp: row.timestamp,
+            hasImages: row.has_images || false
           })),
           messageCount: messagesResult.rows.length
         };
@@ -133,7 +134,7 @@ const resolvers = {
 
         // Get messages
         const messagesQuery = `
-          SELECT id, conversation_id, text, sender, timestamp
+          SELECT id, conversation_id, text, sender, timestamp, has_images
           FROM messages 
           WHERE conversation_id = $1
           ORDER BY timestamp ASC
@@ -146,7 +147,8 @@ const resolvers = {
           conversationId: row.conversation_id,
           text: row.text,
           sender: row.sender,
-          timestamp: row.timestamp
+          timestamp: row.timestamp,
+          hasImages: row.has_images || false
         }));
       } catch (error) {
         console.error("Error fetching messages:", error);
@@ -263,7 +265,7 @@ const resolvers = {
         const messageQuery = `
           INSERT INTO messages (conversation_id, text, sender)
           VALUES ($1, $2, $3)
-          RETURNING id, conversation_id, text, sender, timestamp
+          RETURNING id, conversation_id, text, sender, timestamp, has_images
         `;
 
         const messageResult = await pool.query(messageQuery, [conversationId, text, sender]);
@@ -272,7 +274,8 @@ const resolvers = {
           conversationId: messageResult.rows[0].conversation_id,
           text: messageResult.rows[0].text,
           sender: messageResult.rows[0].sender,
-          timestamp: messageResult.rows[0].timestamp
+          timestamp: messageResult.rows[0].timestamp,
+          hasImages: messageResult.rows[0].has_images || false
         };
 
         let llmResponse = null;
@@ -314,7 +317,7 @@ const resolvers = {
             const llmMessageQuery = `
               INSERT INTO messages (conversation_id, text, sender)
               VALUES ($1, $2, $3)
-              RETURNING id, conversation_id, text, sender, timestamp
+              RETURNING id, conversation_id, text, sender, timestamp, has_images
             `;
 
             const llmMessageResult = await pool.query(llmMessageQuery, [conversationId, llmResponse, "llm"]);
@@ -323,7 +326,8 @@ const resolvers = {
               conversationId: llmMessageResult.rows[0].conversation_id,
               text: llmMessageResult.rows[0].text,
               sender: llmMessageResult.rows[0].sender,
-              timestamp: llmMessageResult.rows[0].timestamp
+              timestamp: llmMessageResult.rows[0].timestamp,
+              hasImages: llmMessageResult.rows[0].has_images || false
             };
 
             console.log(`✅ LLM response stored for conversation: ${conversationId}`);
@@ -705,7 +709,7 @@ const resolvers = {
     messages: async (parent) => {
       try {
         const query = `
-          SELECT id, conversation_id, text, sender, timestamp
+          SELECT id, conversation_id, text, sender, timestamp, has_images
           FROM messages 
           WHERE conversation_id = $1
           ORDER BY timestamp ASC
@@ -716,7 +720,8 @@ const resolvers = {
           conversationId: row.conversation_id,
           text: row.text,
           sender: row.sender,
-          timestamp: row.timestamp
+          timestamp: row.timestamp,
+          hasImages: row.has_images || false
         }));
       } catch (error) {
         console.error("Error resolving messages:", error);
@@ -736,6 +741,47 @@ const resolvers = {
       } catch (error) {
         console.error("Error resolving message count:", error);
         return 0;
+      }
+    }
+  },
+
+  // Field resolvers for Message type
+  Message: {
+    hasImages: async (parent) => {
+      try {
+        const query = `
+          SELECT has_images
+          FROM messages 
+          WHERE id = $1
+        `;
+        const result = await pool.query(query, [parent.id]);
+        return result.rows[0]?.has_images || false;
+      } catch (error) {
+        console.error("Error resolving hasImages:", error);
+        return false;
+      }
+    },
+
+    images: async (parent) => {
+      try {
+        const query = `
+          SELECT id, filename, file_size, mime_type, content_hash, created_at
+          FROM images 
+          WHERE message_id = $1 AND deleted_at IS NULL
+          ORDER BY created_at ASC
+        `;
+        const result = await pool.query(query, [parent.id]);
+        return result.rows.map((row) => ({
+          id: row.id,
+          filename: row.filename,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          contentHash: row.content_hash,
+          createdAt: row.created_at
+        }));
+      } catch (error) {
+        console.error("Error resolving images:", error);
+        return [];
       }
     }
   }

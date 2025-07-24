@@ -12,6 +12,7 @@ import {
 import fs from 'fs/promises';
 import path from 'path';
 
+
 /**
  * Service for handling vision model integration with Ollama
  * Supports vision capability detection, image processing, and vision API calls
@@ -93,12 +94,7 @@ class VisionModelService {
     try {
       const imageBuffer = await fs.readFile(imagePath);
       const base64Data = imageBuffer.toString('base64');
-      
-      // Get MIME type from file extension
-      const ext = path.extname(imagePath).toLowerCase();
-      const mimeType = this.getMimeTypeFromExtension(ext);
-      
-      return `data:${mimeType};base64,${base64Data}`;
+      return base64Data;
     } catch (error) {
       throw new Error(`Failed to convert image to base64: ${error.message}`);
     }
@@ -137,23 +133,23 @@ class VisionModelService {
           throw new Error(`Image not found: ${imageId}`);
         }
 
-        // Validate image file exists
-        const imagePath = await this.imageStorageService.getImagePath(imageId);
-        if (!imagePath) {
+        // Validate image file exists and get path
+        const imageInfo = await this.imageStorageService.getImageInfo(imageId);
+        if (!imageInfo || !imageInfo.path) {
           throw new Error(`Image file not found: ${imageId}`);
         }
+        const imagePath = imageInfo.path;
 
         // Convert to base64
         const base64Data = await this.convertImageToBase64(imagePath);
         
-        // Create vision message
-        const visionMessage = createVisionMessage({
-          type: VISION_MESSAGE_TYPES.IMAGE,
+        // Create vision message with base64 image data
+        const visionMessage = {
           image_url: base64Data,
           image_id: imageId,
           filename: imageRecord.filename,
           mime_type: imageRecord.mime_type
-        });
+        };
         
         visionMessages.push(visionMessage);
       }

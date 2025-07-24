@@ -268,15 +268,11 @@ router.post("/stream-message", async (req, res) => {
     // If we have images and vision is supported, create vision message
     if (processedImages.length > 0) {
       try {
-        const visionSupported = await visionModelService.supportsVision(model);
-        
-        if (visionSupported) {
-          const visionMessage = await visionModelService.createVisionMessage(message, processedImages);
-          ollamaRequest.visionMessage = visionMessage;
-          console.log(`[SSE] Using vision message for model ${model}`);
-        } else {
-          console.log(`[SSE] Model ${model} does not support vision, using text-only message`);
-        }
+                        // Extract image IDs from processed images
+                const imageIds = processedImages.map(img => img.id);
+                const visionMessage = await visionModelService.processImagesForVision(imageIds);
+                ollamaRequest.visionMessage = visionMessage;
+                console.log(`[SSE] Using vision message for model ${model}`);
       } catch (error) {
         console.error("[SSE] Error creating vision message:", error);
         // Continue with text-only message

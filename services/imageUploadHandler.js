@@ -12,6 +12,7 @@ import {
   createImageData, 
   createValidationResult, 
   createImageError,
+  createImageRecord,
   IMAGE_ERRORS,
   IMAGE_SIZE_LIMITS,
   ALLOWED_IMAGE_TYPES,
@@ -117,19 +118,22 @@ class ImageUploadHandler {
     const validationErrors = [];
     const validationWarnings = [];
 
-    for (const file of files) {
-      try {
-        // Create image data object
-        const imageData = createImageData(
-          file.buffer,
-          file.originalname,
-          file.mimetype,
-          file.size
-        );
+          for (const file of files) {
+        try {
+          // Read file buffer from disk since we're using diskStorage
+          const fileBuffer = await fs.readFile(file.path);
+          
+          // Create image data object
+          const imageData = createImageData(
+            fileBuffer,
+            file.originalname,
+            file.mimetype,
+            file.size
+          );
 
         // Validate the image with error handling
         const validationResult = await errorHandlingService.executeImageOperation(
-          () => imageValidationService.validateImage(imageData),
+          () => imageValidationService.validateImageFile(imageData),
           {
             operationName: 'image_validation',
             maxRetries: 2,
@@ -156,18 +160,21 @@ class ImageUploadHandler {
           }
         );
         
+        // Create image record object
+        const imageRecordData = createImageRecord(
+          storedImage.id,
+          conversationId,
+          messageId,
+          storedImage.filename,
+          storedImage.path,
+          storedImage.size,
+          storedImage.mimeType,
+          storedImage.hash
+        );
+
         // Save to database with error handling
         const imageRecord = await errorHandlingService.executeImageOperation(
-          () => imageDatabaseService.createImageRecord(
-            storedImage.id,
-            conversationId,
-            messageId,
-            storedImage.filename,
-            storedImage.path,
-            storedImage.size,
-            storedImage.mimeType,
-            storedImage.hash
-          ),
+          () => imageDatabaseService.saveImageRecord(imageRecordData),
           {
             operationName: 'image_database_save',
             maxRetries: 3,
@@ -230,43 +237,30 @@ class ImageUploadHandler {
       messageId
     );
 
-    // Check if we have images and if the model supports vision
-    let visionSupported = false;
+    // Check if we have images and assume vision is supported
+    let visionSupported = true; // Assume vision is supported
     let visionMessage = null;
 
     if (images.length > 0) {
       try {
-        // Check vision support with error handling
-        visionSupported = await errorHandlingService.executeImageOperation(
-          () => visionModelService.supportsVision(model),
+        // Extract image IDs from processed images
+        const imageIds = images.map(img => img.id);
+        
+        // Process images for vision with error handling
+        visionMessage = await errorHandlingService.executeImageOperation(
+          () => visionModelService.processImagesForVision(imageIds),
           {
-            operationName: 'vision_support_check',
+            operationName: 'vision_message_creation',
             maxRetries: 2,
             enableLogging: true
           }
         );
-        
-        if (visionSupported) {
-          // Create vision message with error handling
-          visionMessage = await errorHandlingService.executeImageOperation(
-            () => visionModelService.createVisionMessage(message, images),
-            {
-              operationName: 'vision_message_creation',
-              maxRetries: 2,
-              enableLogging: true
-            }
-          );
 
-          errorHandlingService.logInfo(`✅ Vision message created for model ${model}`, {
-            model,
-            imageCount: images.length,
-            messageLength: message.length
-          });
-        } else {
-          validationResult.warnings.push(
-            `Model ${model} does not support vision. Images will be ignored.`
-          );
-        }
+        errorHandlingService.logInfo(`✅ Vision message created for model ${model}`, {
+          model,
+          imageCount: images.length,
+          messageLength: message.length
+        });
       } catch (error) {
         // Handle vision model errors with structured error handling
         const errorResult = errorHandlingService.handleVisionModelError(error, {
@@ -276,7 +270,7 @@ class ImageUploadHandler {
         });
 
         validationResult.warnings.push(
-          `Could not verify vision support for model ${model}. Images may be ignored. Error: ${errorResult.error.message}`
+          `Could not create vision message for model ${model}. Images may be ignored. Error: ${errorResult.error.message}`
         );
 
         errorHandlingService.logWarn(`⚠️ Vision processing failed for model ${model}`, {
