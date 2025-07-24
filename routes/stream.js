@@ -169,12 +169,26 @@ router.post("/stream-message", async (req, res) => {
         }
 
         console.log(`[SSE] Successfully processed ${processedImages.length} images`);
+        console.log('[SSE] Processed images data:', processedImages);
         
-        // Send image processing info to client
+        // Send image processing info to client with processed image data
+        const processedImageData = processedImages.map(img => ({
+          id: img.id,
+          filename: img.filename,
+          url: `/api/images/${img.id}?conversationId=${conversationId}`,
+          size: img.size,
+          mimeType: img.mimeType
+        }));
+        
+        console.log('[SSE] Sending processed image data to frontend:', processedImageData);
+        
         res.write(`event: images\ndata: ${JSON.stringify({ 
           processed: processedImages.length,
-          warnings: imgValidation.warnings || []
+          warnings: imgValidation.warnings || [],
+          images: processedImageData
         })}\n\n`);
+        
+        console.log('[SSE] Image event sent to frontend');
 
       } catch (error) {
         console.error("[SSE] Error processing images:", error);
