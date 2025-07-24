@@ -133,14 +133,15 @@ class VisionModelService {
           throw new Error(`Image not found: ${imageId}`);
         }
 
-        // Check if we have base64 data stored
-        if (!imageRecord.base64_data) {
-          throw new Error(`Image base64 data not found: ${imageId}`);
+        // Read file from filesystem and convert to base64
+        let base64Data;
+        try {
+          const imageBuffer = await fs.readFile(imageRecord.file_path);
+          base64Data = imageBuffer.toString('base64');
+        } catch (err) {
+          throw new Error(`Image file not found or unreadable: ${imageRecord.file_path}`);
         }
 
-        // Extract base64 data from the data URL
-        const base64Data = imageRecord.base64_data.replace(/^data:image\/[^;]+;base64,/, '');
-        
         // Create vision message with base64 image data
         const visionMessage = {
           image_url: base64Data,

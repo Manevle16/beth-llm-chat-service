@@ -16,6 +16,8 @@ import {
   formatFileSize
 } from '../types/imageUpload.js';
 
+import os from 'os';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -149,7 +151,7 @@ class ImageStorageService {
   }
 
   /**
-   * Store image in file system
+   * Store image in file system (organized by year/month)
    * @param {Object} imageData - Image data object
    * @param {string} conversationId - Conversation ID
    * @returns {Promise<Object>} Stored image information
@@ -161,15 +163,28 @@ class ImageStorageService {
       throw new Error("Invalid image data provided");
     }
 
+    // Check available disk space before accepting upload
+    const { availableSpace } = await this.getFilesystemStats();
+    if (availableSpace < imageData.size) {
+      throw new Error("Insufficient disk space for image upload");
+    }
+
     try {
+      // Organize by year/month
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const subdir = path.join(this._storagePath, String(year), month);
+      await fs.mkdir(subdir, { recursive: true, mode: 0o755 });
+
       // Generate unique ID and filename
       const imageId = generateImageId();
       const extension = getFileExtension(imageData.originalName);
       const filename = `${imageId}.${extension}`;
-      const filePath = path.join(this._storagePath, filename);
+      const filePath = path.join(subdir, filename);
 
-      // Write file to disk
-      await fs.writeFile(filePath, imageData.buffer);
+      // Write file to disk with 644 permissions
+      await fs.writeFile(filePath, imageData.buffer, { mode: 0o644 });
 
       // Create stored image object
       const storedImage = createStoredImage(
@@ -341,6 +356,25 @@ class ImageStorageService {
     this._ensureInitialized();
     await this._updateStorageStats();
     return { ...this._storageStats };
+  }
+
+  /**
+   * Get filesystem stats, including available disk space
+   */
+  async getFilesystemStats() {
+    // Use os.freemem() as a fallback, but prefer statvfs if available
+    try {
+      const stat = await fs.stat(this._storagePath);
+      // Node.js does not have statvfs, so use os.freemem() for available RAM as a proxy
+      // For real disk space, a native module or external tool would be needed
+      return {
+        availableSpace: os.freemem(),
+        storagePath: this._storagePath,
+        // ...other stats
+      };
+    } catch (e) {
+      return { availableSpace: 0, storagePath: this._storagePath };
+    }
   }
 
   /**

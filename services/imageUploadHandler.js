@@ -153,29 +153,25 @@ class ImageUploadHandler {
           validationWarnings.push(...validationResult.warnings);
         }
 
-        // Convert to base64 for database storage
-        const base64Data = fileBuffer.toString('base64');
-        const dataUrl = `data:${file.mimetype};base64,${base64Data}`;
-
         // Generate unique ID and create image record
         const imageId = generateImageId();
         const extension = path.extname(file.originalname);
         const filename = `${imageId}${extension}`;
         
-        // Create image record object with base64 data
+        // Store the file in the organized filesystem structure
+        const storedImage = await imageStorageService.storeImage(imageData, conversationId);
+        
+        // Create image record object with the permanent file path
         const imageRecordData = createImageRecord(
           imageId,
           conversationId,
           messageId,
           filename,
-          file.path, // Keep file_path for backward compatibility
+          storedImage.path, // Use the permanent path from storage service
           file.size,
           file.mimetype,
           imageData.hash
         );
-
-        // Add base64 data to the record
-        imageRecordData.base64_data = dataUrl;
 
         // Save to database with error handling
         const imageRecord = await errorHandlingService.executeImageOperation(
@@ -190,14 +186,14 @@ class ImageUploadHandler {
         processedImages.push({
           id: imageId,
           filename: filename,
-          path: file.path,
+          path: storedImage.path, // Use the permanent path
           size: file.size,
           mimeType: file.mimetype,
           hash: imageData.hash,
           record: imageRecord
         });
 
-        // Mark temp file for cleanup
+        // Mark temp file for cleanup (it's now moved to permanent location)
         tempFilesToCleanup.push(file.path);
 
         // Record success metrics

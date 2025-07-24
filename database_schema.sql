@@ -33,7 +33,6 @@ CREATE TABLE images (
     file_size INTEGER NOT NULL,
     mime_type VARCHAR(100) NOT NULL,
     content_hash VARCHAR(64) NOT NULL,
-    base64_data TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -71,6 +70,7 @@ CREATE INDEX idx_images_created_at ON images(created_at);
 CREATE INDEX idx_images_expires_at ON images(expires_at);
 CREATE INDEX idx_images_deleted_at ON images(deleted_at);
 CREATE INDEX idx_images_expired ON images(expires_at) WHERE deleted_at IS NULL;
+CREATE INDEX idx_images_file_path ON images(file_path);
 
 -- Indexes for stream sessions
 CREATE INDEX idx_stream_sessions_conversation_id ON stream_sessions(conversation_id);

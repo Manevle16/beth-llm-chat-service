@@ -188,8 +188,8 @@ class ImageDatabaseService {
       const insertQuery = `
         INSERT INTO images (
           id, conversation_id, message_id, filename, file_path, 
-          file_size, mime_type, content_hash, base64_data, created_at, expires_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          file_size, mime_type, content_hash, created_at, expires_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *;
       `;
 
@@ -202,7 +202,6 @@ class ImageDatabaseService {
         imageRecord.file_size,
         imageRecord.mime_type,
         imageRecord.content_hash,
-        imageRecord.base64_data || null,
         imageRecord.created_at,
         imageRecord.expires_at
       ];
