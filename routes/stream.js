@@ -32,6 +32,7 @@ router.post("/stream-message", async (req, res) => {
   let model, message, conversationId, password;
   let processedImages = [];
   let validationResult = null;
+  let hasImages = false;
 
   if (isMultipart) {
     // Handle multipart request with images
@@ -65,36 +66,10 @@ router.post("/stream-message", async (req, res) => {
         return res.end();
       }
 
-      // Process uploaded images if any
+      // Store files for processing after message is saved
       if (req.files && req.files.length > 0) {
-        console.log(`[SSE] Processing ${req.files.length} uploaded images`);
-        
-        // Process images after we save the message (we need the message ID)
-        // For now, just validate them
-        const { images, validationResult: imgValidation } = await imageUploadHandler.processUploadedFiles(
-          req.files, 
-          conversationId, 
-          null // Will be set after message is saved
-        );
-        
-        processedImages = images;
-        validationResult = imgValidation;
-
-        if (!imgValidation.isValid) {
-          console.log("[SSE] Image validation failed:", imgValidation.errors);
-          res.write(`event: error\ndata: ${JSON.stringify({ 
-            error: "Image validation failed", 
-            details: imgValidation.errors 
-          })}\n\n`);
-          return res.end();
-        }
-
-        if (imgValidation.warnings.length > 0) {
-          console.log("[SSE] Image validation warnings:", imgValidation.warnings);
-          res.write(`event: warning\ndata: ${JSON.stringify({ 
-            warnings: imgValidation.warnings 
-          })}\n\n`);
-        }
+        console.log(`[SSE] Found ${req.files.length} uploaded images, will process after message is saved`);
+        hasImages = true;
       }
 
     } catch (error) {
@@ -158,9 +133,6 @@ router.post("/stream-message", async (req, res) => {
 
     const userMsgStart = Date.now();
     
-    // Determine if message has images
-    const hasImages = processedImages.length > 0;
-    
     // Save user message to DB with has_images flag
     const userMsgQuery = `
       INSERT INTO messages (conversation_id, text, sender, has_images)
@@ -172,6 +144,7 @@ router.post("/stream-message", async (req, res) => {
     console.log(`[SSE] User message saved in ${Date.now() - userMsgStart}ms`, userMessage);
 
     // Process images after message is saved (if any)
+    console.log(`[SSE] Debug - hasImages: ${hasImages}, req.files: ${req.files ? req.files.length : 'null'}`);
     if (hasImages && req.files && req.files.length > 0) {
       try {
         console.log(`[SSE] Processing ${req.files.length} images for message ${userMessage.id}`);
