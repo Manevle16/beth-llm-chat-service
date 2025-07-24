@@ -17,6 +17,9 @@
     "test-image-database": "node scripts/test-image-database.js",
     "migrate-images": "node scripts/migrate-image-schema.js",
     "migrate-images-rollback": "node scripts/migrate-image-schema.js --rollback",
+    "migrate-base64": "node scripts/migrate-base64-storage.js",
+    "migrate-base64-rollback": "node scripts/migrate-base64-storage.js --rollback",
+    "cleanup-old-images": "node scripts/cleanup-old-image-files.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch"
   },

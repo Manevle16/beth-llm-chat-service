@@ -33,6 +33,7 @@ CREATE TABLE images (
     file_size INTEGER NOT NULL,
     mime_type VARCHAR(100) NOT NULL,
     content_hash VARCHAR(64) NOT NULL,
+    base64_data TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     deleted_at TIMESTAMP WITH TIME ZONE

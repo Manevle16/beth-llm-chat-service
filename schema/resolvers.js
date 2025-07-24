@@ -765,48 +765,22 @@ const resolvers = {
     images: async (parent) => {
       try {
         const query = `
-          SELECT id, filename, file_size, mime_type, content_hash, created_at, file_path
+          SELECT id, filename, file_size, mime_type, content_hash, created_at, base64_data
           FROM images 
           WHERE message_id = $1 AND deleted_at IS NULL
           ORDER BY created_at ASC
         `;
         const result = await pool.query(query, [parent.id]);
         
-        const images = [];
-        
-        for (const row of result.rows) {
-          try {
-            // Read the image file and convert to base64
-            const fs = await import('fs/promises');
-            const imageBuffer = await fs.readFile(row.file_path);
-            const base64Data = imageBuffer.toString('base64');
-            const dataUrl = `data:${row.mime_type};base64,${base64Data}`;
-            
-            images.push({
-              id: row.id,
-              filename: row.filename,
-              fileSize: row.file_size,
-              mimeType: row.mime_type,
-              contentHash: row.content_hash,
-              createdAt: row.created_at,
-              url: dataUrl
-            });
-          } catch (fileError) {
-            console.error(`Error reading image file ${row.file_path}:`, fileError);
-            // Return image metadata without URL if file can't be read
-            images.push({
-              id: row.id,
-              filename: row.filename,
-              fileSize: row.file_size,
-              mimeType: row.mime_type,
-              contentHash: row.content_hash,
-              createdAt: row.created_at,
-              url: null
-            });
-          }
-        }
-        
-        return images;
+        return result.rows.map((row) => ({
+          id: row.id,
+          filename: row.filename,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          contentHash: row.content_hash,
+          createdAt: row.created_at,
+          url: row.base64_data || null
+        }));
       } catch (error) {
         console.error("Error resolving images:", error);
         return [];

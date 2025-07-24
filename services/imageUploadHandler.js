@@ -117,19 +117,20 @@ class ImageUploadHandler {
     const processedImages = [];
     const validationErrors = [];
     const validationWarnings = [];
+    const tempFilesToCleanup = [];
 
-          for (const file of files) {
-        try {
-          // Read file buffer from disk since we're using diskStorage
-          const fileBuffer = await fs.readFile(file.path);
-          
-          // Create image data object
-          const imageData = createImageData(
-            fileBuffer,
-            file.originalname,
-            file.mimetype,
-            file.size
-          );
+    for (const file of files) {
+      try {
+        // Read file buffer from disk since we're using diskStorage
+        const fileBuffer = await fs.readFile(file.path);
+        
+        // Create image data object
+        const imageData = createImageData(
+          fileBuffer,
+          file.originalname,
+          file.mimetype,
+          file.size
+        );
 
         // Validate the image with error handling
         const validationResult = await errorHandlingService.executeImageOperation(
@@ -143,6 +144,8 @@ class ImageUploadHandler {
         
         if (!validationResult.isValid) {
           validationErrors.push(...validationResult.errors);
+          // Clean up temp file on validation failure
+          tempFilesToCleanup.push(file.path);
           continue;
         }
 
@@ -150,27 +153,29 @@ class ImageUploadHandler {
           validationWarnings.push(...validationResult.warnings);
         }
 
-        // Store the image with error handling
-        const storedImage = await errorHandlingService.executeImageOperation(
-          () => imageStorageService.storeImage(imageData, file.path),
-          {
-            operationName: 'image_storage',
-            maxRetries: 3,
-            enableLogging: true
-          }
-        );
+        // Convert to base64 for database storage
+        const base64Data = fileBuffer.toString('base64');
+        const dataUrl = `data:${file.mimetype};base64,${base64Data}`;
+
+        // Generate unique ID and create image record
+        const imageId = generateImageId();
+        const extension = path.extname(file.originalname);
+        const filename = `${imageId}${extension}`;
         
-        // Create image record object
+        // Create image record object with base64 data
         const imageRecordData = createImageRecord(
-          storedImage.id,
+          imageId,
           conversationId,
           messageId,
-          storedImage.filename,
-          storedImage.path,
-          storedImage.size,
-          storedImage.mimeType,
-          storedImage.hash
+          filename,
+          file.path, // Keep file_path for backward compatibility
+          file.size,
+          file.mimetype,
+          imageData.hash
         );
+
+        // Add base64 data to the record
+        imageRecordData.base64_data = dataUrl;
 
         // Save to database with error handling
         const imageRecord = await errorHandlingService.executeImageOperation(
@@ -183,13 +188,21 @@ class ImageUploadHandler {
         );
 
         processedImages.push({
-          ...storedImage,
+          id: imageId,
+          filename: filename,
+          path: file.path,
+          size: file.size,
+          mimeType: file.mimetype,
+          hash: imageData.hash,
           record: imageRecord
         });
 
+        // Mark temp file for cleanup
+        tempFilesToCleanup.push(file.path);
+
         // Record success metrics
         errorHandlingService.logInfo(`✅ Successfully processed image: ${file.originalname}`, {
-          imageId: storedImage.id,
+          imageId: imageId,
           filename: file.originalname,
           size: file.size
         });
@@ -204,6 +217,9 @@ class ImageUploadHandler {
 
         validationErrors.push(`Failed to process ${file.originalname}: ${errorResult.error.message}`);
         
+        // Mark temp file for cleanup on error
+        tempFilesToCleanup.push(file.path);
+        
         // Log detailed error information
         errorHandlingService.logError(`❌ Failed to process image: ${file.originalname}`, {
           error: errorResult.error,
@@ -212,6 +228,9 @@ class ImageUploadHandler {
         });
       }
     }
+
+    // Clean up temporary files
+    await this.cleanupTempFiles(tempFilesToCleanup);
 
     return {
       images: processedImages,
@@ -292,6 +311,24 @@ class ImageUploadHandler {
   }
 
   /**
+   * Clean up temporary files
+   */
+  async cleanupTempFiles(filePaths) {
+    if (!filePaths || filePaths.length === 0) {
+      return;
+    }
+
+    for (const filePath of filePaths) {
+      try {
+        await fs.unlink(filePath);
+        console.log(`🗑️  Cleaned up temporary file: ${filePath}`);
+      } catch (error) {
+        console.warn(`⚠️  Failed to clean up temporary file: ${filePath}`, error.message);
+      }
+    }
+  }
+
+  /**
    * Clean up uploaded files on error
    */
   async cleanupOnError(files) {
@@ -299,14 +336,8 @@ class ImageUploadHandler {
       return;
     }
 
-    for (const file of files) {
-      try {
-        await fs.unlink(file.path);
-        console.log(`Cleaned up file: ${file.path}`);
-      } catch (error) {
-        console.error(`Failed to cleanup file ${file.path}:`, error);
-      }
-    }
+    const filePaths = files.map(file => file.path);
+    await this.cleanupTempFiles(filePaths);
   }
 
   /**
