@@ -457,8 +457,7 @@ class StreamSessionManager {
             cleanedAt: now,
             tokenCount: terminatedSession.tokenCount
           });
-          
-          console.log(`⏰ Cleaned up expired session: ${sessionId} (${session.tokenCount} tokens)`);
+        
         } catch (error) {
           errorCount++;
           streamTerminationErrorHandler.logError(`Failed to clean up expired session: ${sessionId}`, {

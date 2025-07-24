@@ -52,9 +52,10 @@ class StreamTerminationErrorHandler {
       baseDelay = 1000,
       maxDelay = 10000,
       backoffMultiplier = 2,
-      enableLogging = true,
       enableMetrics = true
     } = options;
+
+    const enableLogging = false;
 
     const operationId = this._generateOperationId(operationName);
     const startTime = Date.now();
@@ -199,8 +200,7 @@ class StreamTerminationErrorHandler {
     
     // Update aggregated metrics
     Object.assign(sessionData.metrics, metrics);
-    
-    this.logDebug(`📈 Session metrics updated: ${sessionId}`, { sessionId, metrics });
+  
   }
 
   /**
