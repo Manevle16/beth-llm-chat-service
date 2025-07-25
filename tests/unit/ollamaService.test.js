@@ -8,13 +8,49 @@ import modelRotationService from '../../services/modelRotationService.js';
 import { REQUEST_PRIORITY } from '../../types/modelRotation.js';
 
 describe('OllamaService', () => {
+  let originalOllama;
+
   beforeEach(async () => {
     // Reset state for each test
     if (ollamaService._isInitialized) {
       ollamaService._isInitialized = false;
       ollamaService._rotationEnabled = false;
     }
-    // Removed jest.clearAllMocks?.(); for ES module compatibility
+    
+    // Mock the Ollama client methods
+    originalOllama = ollamaService.ollama;
+    ollamaService.ollama = {
+      list: async () => ({
+        models: [
+          { name: 'llama3.1:8b' },
+          { name: 'llama3.1:70b' },
+          { name: 'mistral:7b' }
+        ]
+      }),
+      generate: async (params) => {
+        if (params.model === 'non-existent-model') {
+          throw new Error('Model not found');
+        }
+        return {
+          response: 'Mock response from Ollama'
+        };
+      },
+      chat: async (params) => {
+        if (params.model === 'non-existent-model') {
+          throw new Error('Model not found');
+        }
+        return {
+          message: { content: 'Mock chat response from Ollama' }
+        };
+      }
+    };
+  });
+
+  afterEach(() => {
+    // Restore original Ollama client
+    if (originalOllama) {
+      ollamaService.ollama = originalOllama;
+    }
   });
 
   test('should initialize and set rotation state', async () => {
@@ -47,15 +83,23 @@ describe('OllamaService', () => {
 
   test('should handle model listing and existence check', async () => {
     await ollamaService.initialize();
-    // These may depend on actual Ollama server state, so just check types
+    
+    // Test with mocked models
     const models = await ollamaService.listModels();
     expect(Array.isArray(models)).toBe(true);
-    if (models.length > 0) {
-      const exists = await ollamaService.checkModelExists(models[0]);
-      expect(typeof exists).toBe('boolean');
-    }
+    expect(models).toContain('llama3.1:8b');
+    expect(models).toContain('llama3.1:70b');
+    expect(models).toContain('mistral:7b');
+    
+    // Test model existence checks
+    const exists = await ollamaService.checkModelExists('llama3.1:8b');
+    expect(exists).toBe(true);
+    
     const notExists = await ollamaService.checkModelExists('non-existent-model-check');
-    expect(typeof notExists).toBe('boolean');
+    expect(notExists).toBe(false);
+    
+    // Verify the models were returned correctly
+    expect(models.length).toBe(3);
   });
 
   test('should get rotation status and history', async () => {

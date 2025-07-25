@@ -11,13 +11,34 @@ import {
   TERMINATION_REASON,
   createStreamSession
 } from '../../types/streamSession.js';
+import pool from '../../config/database.js';
 
 describe('StreamSessionDatabase', () => {
   let testSession;
 
   beforeEach(async () => {
     await streamSessionDatabase.initialize();
+    
+    // Create the test conversation first to satisfy foreign key constraint
+    const conversationQuery = `
+      INSERT INTO conversations (id, tab_name, llm_model, is_private) 
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id) DO NOTHING
+    `;
+    await pool.query(conversationQuery, [
+      'conv-db-test-123', 
+      'Test Conversation', 
+      'llama3.1:8b', 
+      false
+    ]);
+    
     testSession = createStreamSession('conv-db-test-123', 'llama3.1:8b', 60000);
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await pool.query('DELETE FROM stream_sessions WHERE conversation_id = $1', ['conv-db-test-123']);
+    await pool.query('DELETE FROM conversations WHERE id = $1', ['conv-db-test-123']);
   });
 
   describe('Initialization', () => {

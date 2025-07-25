@@ -6,157 +6,210 @@
 
 import modelStateTracker from '../../services/modelStateTracker.js';
 
-// Test basic state tracking functionality
-console.log('🧪 Testing ModelStateTracker...');
+describe('ModelStateTracker', () => {
+  
+  beforeAll(async () => {
+    // Initialize once for all tests
+    // Suppress console.error to avoid Ollama connection error messages
+    const originalConsoleError = console.error;
+    console.error = () => {}; // Silent function
+    
+    try {
+      await modelStateTracker.initialize();
+    } catch (error) {
+      // Error is expected when Ollama is not running
+    }
+    
+    // Restore console.error
+    console.error = originalConsoleError;
+  });
 
-// Test 1: Basic initialization
-console.log('\n1️⃣  Testing basic initialization...');
-try {
-  await modelStateTracker.initialize();
-  console.log('✅ ModelStateTracker initialized');
-} catch (error) {
-  console.log('⚠️  Initialization failed (Ollama may not be running):', error.message);
-}
+  beforeEach(async () => {
+    // Reset and re-initialize before each test to ensure clean state
+    modelStateTracker.reset();
+    
+    // Suppress console.error to avoid Ollama connection error messages
+    const originalConsoleError = console.error;
+    console.error = () => {}; // Silent function
+    
+    try {
+      await modelStateTracker.initialize();
+    } catch (error) {
+      // Ignore initialization errors - service should work with empty state
+      // Error is expected when Ollama is not running
+    }
+    
+    // Restore console.error
+    console.error = originalConsoleError;
+  });
 
-// Test 2: Get initial state
-console.log('\n2️⃣  Testing initial state...');
-const initialState = modelStateTracker.getStateSummary();
-console.log('✅ Initial state:', initialState);
+  afterEach(() => {
+    // Clean up after each test
+    try {
+      modelStateTracker.reset();
+    } catch (error) {
+      // Ignore reset errors
+    }
+  });
 
-// Test 3: Set active model
-console.log('\n3️⃣  Testing set active model...');
-try {
-  await modelStateTracker.setActiveModel('test-model-1');
-  console.log('✅ Active model set to: test-model-1');
-} catch (error) {
-  console.log('⚠️  Set active model failed:', error.message);
-}
+  describe('Basic initialization', () => {
+    test('should initialize successfully', async () => {
+      expect(modelStateTracker).toBeDefined();
+      // The service should be initialized even if Ollama is not available
+      expect(() => modelStateTracker.getStateSummary()).not.toThrow();
+    });
 
-// Test 4: Get active model
-console.log('\n4️⃣  Testing get active model...');
-const activeModel = modelStateTracker.getActiveModel();
-console.log('✅ Active model:', activeModel);
+    test('should get initial state', () => {
+      const initialState = modelStateTracker.getStateSummary();
+      expect(initialState).toBeDefined();
+      expect(typeof initialState).toBe('object');
+    });
+  });
 
-// Test 5: Get model metadata
-console.log('\n5️⃣  Testing get model metadata...');
-const metadata = modelStateTracker.getModelMetadata('test-model-1');
-console.log('✅ Model metadata:', metadata ? {
-  name: metadata.name,
-  requestCount: metadata.requestCount,
-  loadedAt: metadata.loadedAt.toISOString()
-} : 'null');
+  describe('Active model management', () => {
+    test('should set active model', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const activeModel = modelStateTracker.getActiveModel();
+      expect(activeModel).toBe('test-model-1');
+    });
 
-// Test 6: Set same model again (should update usage)
-console.log('\n6️⃣  Testing set same model (usage update)...');
-try {
-  await modelStateTracker.setActiveModel('test-model-1');
-  const updatedMetadata = modelStateTracker.getModelMetadata('test-model-1');
-  console.log('✅ Updated metadata request count:', updatedMetadata.requestCount);
-} catch (error) {
-  console.log('⚠️  Set same model failed:', error.message);
-}
+    test('should get active model', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const activeModel = modelStateTracker.getActiveModel();
+      expect(activeModel).toBe('test-model-1');
+    });
 
-// Test 7: Set different model
-console.log('\n7️⃣  Testing set different model...');
-try {
-  await modelStateTracker.setActiveModel('test-model-2');
-  console.log('✅ Active model changed to: test-model-2');
-} catch (error) {
-  console.log('⚠️  Set different model failed:', error.message);
-}
+    test('should update usage when setting same model', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const initialMetadata = modelStateTracker.getModelMetadata('test-model-1');
+      const initialCount = initialMetadata.requestCount;
+      
+      await modelStateTracker.setActiveModel('test-model-1');
+      const updatedMetadata = modelStateTracker.getModelMetadata('test-model-1');
+      expect(updatedMetadata.requestCount).toBeGreaterThan(initialCount);
+    });
 
-// Test 8: Check model loading status
-console.log('\n8️⃣  Testing model loading status...');
-const isLoaded1 = modelStateTracker.isModelLoaded('test-model-1');
-const isLoaded2 = modelStateTracker.isModelLoaded('test-model-2');
-const isLoaded3 = modelStateTracker.isModelLoaded('non-existent-model');
-console.log('✅ Model loading status:', {
-  'test-model-1': isLoaded1,
-  'test-model-2': isLoaded2,
-  'non-existent-model': isLoaded3
-});
+    test('should set different model', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      await modelStateTracker.setActiveModel('test-model-2');
+      const activeModel = modelStateTracker.getActiveModel();
+      expect(activeModel).toBe('test-model-2');
+    });
 
-// Test 9: Get loaded model count
-console.log('\n9️⃣  Testing loaded model count...');
-const modelCount = modelStateTracker.getLoadedModelCount();
-console.log('✅ Loaded model count:', modelCount);
+    test('should clear active model', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const wasCleared = await modelStateTracker.clearActiveModel();
+      expect(wasCleared).toBe(true);
+      expect(modelStateTracker.getActiveModel()).toBeNull();
+    });
+  });
 
-// Test 10: Get all model metadata
-console.log('\n🔟 Testing get all model metadata...');
-const allMetadata = modelStateTracker.getAllModelMetadata();
-console.log('✅ All model metadata count:', allMetadata.length);
-allMetadata.forEach((meta, index) => {
-  console.log(`   ${index + 1}. ${meta.name} (requests: ${meta.requestCount})`);
-});
+  describe('Model metadata', () => {
+    test('should get model metadata', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const metadata = modelStateTracker.getModelMetadata('test-model-1');
+      expect(metadata).toBeDefined();
+      expect(metadata.name).toBe('test-model-1');
+      expect(typeof metadata.requestCount).toBe('number');
+      expect(metadata.loadedAt).toBeInstanceOf(Date);
+    });
 
-// Test 11: Get least recently used model
-console.log('\n1️⃣1️⃣  Testing least recently used model...');
-const lruModel = modelStateTracker.getLeastRecentlyUsedModel();
-console.log('✅ Least recently used model:', lruModel);
+    test('should get all model metadata', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      await modelStateTracker.setActiveModel('test-model-2');
+      const allMetadata = modelStateTracker.getAllModelMetadata();
+      expect(Array.isArray(allMetadata)).toBe(true);
+      expect(allMetadata.length).toBeGreaterThan(0);
+    });
 
-// Test 12: Clear active model
-console.log('\n1️⃣2️⃣  Testing clear active model...');
-const wasCleared = await modelStateTracker.clearActiveModel();
-console.log('✅ Active model cleared:', wasCleared);
+    test('should handle invalid metadata requests', () => {
+      const invalidMetadata = modelStateTracker.getModelMetadata('non-existent');
+      expect(invalidMetadata).toBeNull();
+    });
+  });
 
-// Test 13: Get state after clearing
-console.log('\n1️⃣3️⃣  Testing state after clearing...');
-const stateAfterClear = modelStateTracker.getStateSummary();
-console.log('✅ State after clearing:', stateAfterClear);
+  describe('Model loading status', () => {
+    test('should check model loading status', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const isLoaded1 = modelStateTracker.isModelLoaded('test-model-1');
+      const isLoaded2 = modelStateTracker.isModelLoaded('test-model-2');
+      const isLoaded3 = modelStateTracker.isModelLoaded('non-existent-model');
+      
+      expect(typeof isLoaded1).toBe('boolean');
+      expect(typeof isLoaded2).toBe('boolean');
+      expect(typeof isLoaded3).toBe('boolean');
+    });
 
-// Test 14: Remove model from tracking
-console.log('\n1️⃣4️⃣  Testing remove model...');
-const wasRemoved = modelStateTracker.removeModel('test-model-1');
-console.log('✅ Model removed:', wasRemoved);
+    test('should get loaded model count', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const modelCount = modelStateTracker.getLoadedModelCount();
+      expect(typeof modelCount).toBe('number');
+      expect(modelCount).toBeGreaterThanOrEqual(0);
+    });
+  });
 
-// Test 15: Get state after removal
-console.log('\n1️⃣5️⃣  Testing state after removal...');
-const stateAfterRemoval = modelStateTracker.getStateSummary();
-console.log('✅ State after removal:', stateAfterRemoval);
+  describe('Model management', () => {
+    test('should get least recently used model', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      await modelStateTracker.setActiveModel('test-model-2');
+      const lruModel = modelStateTracker.getLeastRecentlyUsedModel();
+      expect(lruModel).toBeDefined();
+    });
 
-// Test 16: Test invalid inputs
-console.log('\n1️⃣6️⃣  Testing invalid inputs...');
-try {
-  await modelStateTracker.setActiveModel('');
-  console.log('❌ Should have thrown error for empty model name');
-} catch (error) {
-  console.log('✅ Correctly rejected empty model name:', error.message);
-}
+    test('should remove model from tracking', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      const wasRemoved = modelStateTracker.removeModel('test-model-1');
+      expect(wasRemoved).toBe(true);
+    });
 
-try {
-  await modelStateTracker.setActiveModel(null);
-  console.log('❌ Should have thrown error for null model name');
-} catch (error) {
-  console.log('✅ Correctly rejected null model name:', error.message);
-}
+    test('should get state after removal', async () => {
+      await modelStateTracker.setActiveModel('test-model-1');
+      modelStateTracker.removeModel('test-model-1');
+      const stateAfterRemoval = modelStateTracker.getStateSummary();
+      expect(stateAfterRemoval).toBeDefined();
+    });
+  });
 
-// Test 17: Test metadata validation
-console.log('\n1️⃣7️⃣  Testing metadata validation...');
-const invalidMetadata = modelStateTracker.getModelMetadata('non-existent');
-console.log('✅ Invalid metadata handling:', invalidMetadata === null);
+  describe('Input validation', () => {
+    test('should reject empty model name', async () => {
+      await expect(modelStateTracker.setActiveModel('')).rejects.toThrow();
+    });
 
-// Test 18: Test state summary
-console.log('\n1️⃣8️⃣  Testing state summary...');
-const finalSummary = modelStateTracker.getStateSummary();
-console.log('✅ Final state summary:', finalSummary);
+    test('should reject null model name', async () => {
+      await expect(modelStateTracker.setActiveModel(null)).rejects.toThrow();
+    });
+  });
 
-// Test 19: Test reset functionality
-console.log('\n1️⃣9️⃣  Testing reset functionality...');
-modelStateTracker.reset();
-try {
-  const resetState = modelStateTracker.getStateSummary();
-  console.log('❌ Should have thrown error after reset');
-} catch (error) {
-  console.log('✅ Correctly requires initialization after reset:', error.message);
-}
+  describe('State management', () => {
+    test('should get state summary', () => {
+      const summary = modelStateTracker.getStateSummary();
+      expect(summary).toBeDefined();
+      expect(typeof summary).toBe('object');
+    });
 
-// Test 20: Test re-initialization after reset
-console.log('\n2️⃣0️⃣  Testing re-initialization after reset...');
-try {
-  await modelStateTracker.initialize();
-  console.log('✅ Re-initialization successful');
-} catch (error) {
-  console.log('⚠️  Re-initialization failed:', error.message);
-}
+    test('should reset and require re-initialization', () => {
+      modelStateTracker.reset();
+      expect(() => modelStateTracker.getStateSummary()).toThrow();
+    });
 
-console.log('\n🎉 All ModelStateTracker tests completed!'); 
+    test('should re-initialize after reset', async () => {
+      modelStateTracker.reset();
+      
+      // Suppress console.error to avoid Ollama connection error messages
+      const originalConsoleError = console.error;
+      console.error = () => {}; // Silent function
+      
+      try {
+        await modelStateTracker.initialize();
+        const state = modelStateTracker.getStateSummary();
+        expect(state).toBeDefined();
+      } catch (error) {
+        // If Ollama is not available, the service should still work with empty state
+        // Error is expected when Ollama is not running
+      }
+      
+      // Restore console.error
+      console.error = originalConsoleError;
+    });
+  });
+}); 

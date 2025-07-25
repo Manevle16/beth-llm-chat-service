@@ -6,281 +6,270 @@
 
 import streamTerminationErrorHandler from "../../services/streamTerminationErrorHandler.js";
 
-console.log('🧪 Testing StreamTerminationErrorHandler...');
-
-// Test 1: Basic initialization
-console.log('\n1️⃣  Testing basic initialization...');
-try {
-  await streamTerminationErrorHandler.initialize();
-  console.log('✅ StreamTerminationErrorHandler initialized successfully');
-} catch (error) {
-  console.log('❌ Initialization failed:', error.message);
-}
-
-// Test 2: Error handling and retry logic
-console.log('\n2️⃣  Testing error handling and retry logic...');
-try {
-  // Test successful operation
-  const successOperation = async () => "success";
-  const successResult = await streamTerminationErrorHandler.executeWithRetry(successOperation, {
-    operationName: "test_success",
-    sessionId: "test-session-1",
-    conversationId: "test-conversation-1"
-  });
-  console.log('✅ Success operation result:', successResult);
-
-  // Test retry on temporary errors
-  let attemptCount = 0;
-  const retryOperation = async () => {
-    attemptCount++;
-    if (attemptCount < 3) {
-      throw new Error("temporary network error");
-    }
-    return "retry success";
-  };
+describe('StreamTerminationErrorHandler', () => {
   
-  const retryResult = await streamTerminationErrorHandler.executeWithRetry(retryOperation, {
-    operationName: "test_retry",
-    sessionId: "test-session-2",
-    maxRetries: 2,
-    baseDelay: 10
+  beforeAll(async () => {
+    await streamTerminationErrorHandler.initialize();
   });
-  console.log('✅ Retry operation result:', retryResult);
-  console.log('✅ Attempt count:', attemptCount);
 
-  // Test no retry on validation errors
-  const validationOperation = async () => {
-    throw new Error("invalid session ID");
-  };
-  
-  try {
-    await streamTerminationErrorHandler.executeWithRetry(validationOperation, {
-      operationName: "test_validation_error",
-      sessionId: "test-session-3",
-      maxRetries: 3
+  beforeEach(() => {
+    // Clean up before each test to ensure isolation
+    streamTerminationErrorHandler.clearLogBuffer();
+    streamTerminationErrorHandler.clearErrorStats();
+  });
+
+  afterEach(() => {
+    // Clean up after each test
+    streamTerminationErrorHandler.clearLogBuffer();
+    streamTerminationErrorHandler.clearErrorStats();
+  });
+
+  describe('Basic initialization', () => {
+    test('should initialize successfully', async () => {
+      expect(streamTerminationErrorHandler).toBeDefined();
+      // Re-initialize to test the initialization
+      await streamTerminationErrorHandler.initialize();
+      expect(true).toBe(true); // If we get here, initialization succeeded
     });
-    console.log('❌ Should have thrown error');
-  } catch (error) {
-    console.log('✅ Validation error correctly not retried:', error.message);
-  }
-} catch (error) {
-  console.log('❌ Error handling test failed:', error.message);
-}
-
-// Test 3: Logging and observability
-console.log('\n3️⃣  Testing logging and observability...');
-try {
-  // Test termination event logging
-  const eventData = {
-    sessionId: "test-session-5",
-    conversationId: "test-conversation-5",
-    reason: "USER_REQUESTED",
-    tokenCount: 150,
-    partialResponseLength: 500
-  };
-  
-  streamTerminationErrorHandler.logTerminationEvent("session_terminated", eventData);
-  console.log('✅ Termination event logged');
-
-  // Test session metrics tracking
-  const sessionId = "test-session-6";
-  const metrics = {
-    status: "ACTIVE",
-    conversationId: "test-conversation-6",
-    model: "llama2",
-    tokenCount: 100,
-    partialResponseLength: 300
-  };
-  
-  streamTerminationErrorHandler.trackSessionMetrics(sessionId, metrics);
-  const sessionMetrics = streamTerminationErrorHandler.getSessionMetrics(sessionId);
-  console.log('✅ Session metrics tracked:', {
-    hasMetrics: !!sessionMetrics,
-    status: sessionMetrics?.metrics?.status,
-    tokenCount: sessionMetrics?.metrics?.tokenCount
   });
 
-  // Test different log levels
-  streamTerminationErrorHandler.logInfo("Info message", { context: "test" });
-  streamTerminationErrorHandler.logWarn("Warning message", { context: "test" });
-  streamTerminationErrorHandler.logError("Error message", { context: "test" });
-  streamTerminationErrorHandler.logDebug("Debug message", { context: "test" });
-  console.log('✅ All log levels tested');
-} catch (error) {
-  console.log('❌ Logging test failed:', error.message);
-}
-
-// Test 4: Metrics and statistics
-console.log('\n4️⃣  Testing metrics and statistics...');
-try {
-  // Clear previous stats
-  streamTerminationErrorHandler.clearErrorStats();
-  
-  // Execute operations to generate stats
-  const successOp = async () => "success";
-  const errorOp = async () => { throw new Error("test error"); };
-  
-  await streamTerminationErrorHandler.executeWithRetry(successOp, {
-    operationName: "test_stats_success"
-  });
-  
-  try {
-    await streamTerminationErrorHandler.executeWithRetry(errorOp, {
-      operationName: "test_stats_error"
+  describe('Error handling and retry logic', () => {
+    test('should execute successful operations', async () => {
+      const successOperation = async () => "success";
+      const successResult = await streamTerminationErrorHandler.executeWithRetry(successOperation, {
+        operationName: "test_success",
+        sessionId: "test-session-1",
+        conversationId: "test-conversation-1"
+      });
+      expect(successResult).toBe("success");
     });
-  } catch (error) {
-    // Expected error
-  }
-  
-  const stats = streamTerminationErrorHandler.getErrorStats();
-  console.log('✅ Error statistics:', {
-    totalErrors: stats.totalErrors,
-    successCount: stats.operationStats.test_stats_success?.successCount,
-    errorCount: stats.operationStats.test_stats_error?.errorCount,
-    uptime: stats.uptime > 0
+
+    test('should retry on temporary errors', async () => {
+      let attemptCount = 0;
+      const retryOperation = async () => {
+        attemptCount++;
+        if (attemptCount < 3) {
+          throw new Error("temporary network error");
+        }
+        return "retry success";
+      };
+      
+      const retryResult = await streamTerminationErrorHandler.executeWithRetry(retryOperation, {
+        operationName: "test_retry",
+        sessionId: "test-session-2",
+        maxRetries: 2,
+        baseDelay: 10
+      });
+      
+      expect(retryResult).toBe("retry success");
+      expect(attemptCount).toBe(3);
+    });
+
+    test('should not retry on validation errors', async () => {
+      const validationOperation = async () => {
+        throw new Error("invalid session ID");
+      };
+      
+      await expect(streamTerminationErrorHandler.executeWithRetry(validationOperation, {
+        operationName: "test_validation_error",
+        sessionId: "test-session-3",
+        maxRetries: 3
+      })).rejects.toThrow("invalid session ID");
+    });
   });
 
-  // Test operation metrics
-  const slowOperation = async () => {
-    await new Promise(resolve => setTimeout(resolve, 50));
-    return "slow success";
-  };
-  
-  await streamTerminationErrorHandler.executeWithRetry(slowOperation, {
-    operationName: "test_duration",
-    enableMetrics: true
-  });
-  
-  const metrics = streamTerminationErrorHandler.getOperationMetrics("test_duration");
-  console.log('✅ Operation metrics:', {
-    totalCalls: metrics.totalCalls,
-    successCount: metrics.successCount,
-    hasDuration: metrics.totalDuration > 0
-  });
-} catch (error) {
-  console.log('❌ Metrics test failed:', error.message);
-}
+  describe('Logging and observability', () => {
+    test('should log termination events', () => {
+      const eventData = {
+        sessionId: "test-session-5",
+        conversationId: "test-conversation-5",
+        reason: "USER_REQUESTED",
+        tokenCount: 150,
+        partialResponseLength: 500
+      };
+      
+      expect(() => {
+        streamTerminationErrorHandler.logTerminationEvent("session_terminated", eventData);
+      }).not.toThrow();
+    });
 
-// Test 5: Error recovery and concurrent operations
-console.log('\n5️⃣  Testing error recovery and concurrent operations...');
-try {
-  const operations = [];
-  const results = [];
-  
-  // Start multiple concurrent operations
-  for (let i = 0; i < 3; i++) {
-    const operation = async () => `result-${i}`;
-    operations.push(operation);
-    
-    results.push(streamTerminationErrorHandler.executeWithRetry(operation, {
-      operationName: "concurrent_test",
-      sessionId: `session-${i}`
-    }));
-  }
-  
-  const resolvedResults = await Promise.all(results);
-  console.log('✅ Concurrent operations completed:', resolvedResults);
-} catch (error) {
-  console.log('❌ Concurrent operations test failed:', error.message);
-}
+    test('should track session metrics', () => {
+      const sessionId = "test-session-6";
+      const metrics = {
+        status: "ACTIVE",
+        conversationId: "test-conversation-6",
+        model: "llama2",
+        tokenCount: 100,
+        partialResponseLength: 300
+      };
+      
+      streamTerminationErrorHandler.trackSessionMetrics(sessionId, metrics);
+      const sessionMetrics = streamTerminationErrorHandler.getSessionMetrics(sessionId);
+      
+      expect(sessionMetrics).toBeDefined();
+      expect(sessionMetrics.metrics.status).toBe("ACTIVE");
+      expect(sessionMetrics.metrics.tokenCount).toBe(100);
+    });
 
-// Test 6: Utility functions
-console.log('\n6️⃣  Testing utility functions...');
-try {
-  // Test operation ID generation
-  const id1 = streamTerminationErrorHandler._generateOperationId("test_op");
-  const id2 = streamTerminationErrorHandler._generateOperationId("test_op");
-  console.log('✅ Operation ID generation:', {
-    unique: id1 !== id2,
-    format1: /^test_op_\d+_[a-z0-9]+$/.test(id1),
-    format2: /^test_op_\d+_[a-z0-9]+$/.test(id2)
+    test('should handle different log levels', () => {
+      expect(() => {
+        streamTerminationErrorHandler.logInfo("Info message", { context: "test" });
+        streamTerminationErrorHandler.logWarn("Warning message", { context: "test" });
+        streamTerminationErrorHandler.logError("Error message", { context: "test" });
+        streamTerminationErrorHandler.logDebug("Debug message", { context: "test" });
+      }).not.toThrow();
+    });
   });
 
-  // Test event ID generation
-  const eventId1 = streamTerminationErrorHandler._generateEventId("test_event");
-  const eventId2 = streamTerminationErrorHandler._generateEventId("test_event");
-  console.log('✅ Event ID generation:', {
-    unique: eventId1 !== eventId2,
-    format1: /^test_event_\d+_[a-z0-9]+$/.test(eventId1),
-    format2: /^test_event_\d+_[a-z0-9]+$/.test(eventId2)
+  describe('Metrics and statistics', () => {
+    test('should track error statistics', async () => {
+      // Get initial stats
+      const initialStats = streamTerminationErrorHandler.getErrorStats();
+      const initialTotalErrors = initialStats.totalErrors;
+      
+      // Execute operations to generate stats
+      const successOp = async () => "success";
+      const errorOp = async () => { throw new Error("test error"); };
+      
+      await streamTerminationErrorHandler.executeWithRetry(successOp, {
+        operationName: "test_stats_success"
+      });
+      
+      try {
+        await streamTerminationErrorHandler.executeWithRetry(errorOp, {
+          operationName: "test_stats_error"
+        });
+      } catch (error) {
+        // Expected error
+      }
+      
+      const stats = streamTerminationErrorHandler.getErrorStats();
+      expect(stats.totalErrors).toBeGreaterThan(initialTotalErrors);
+      expect(stats.operationStats.test_stats_success?.successCount).toBeGreaterThan(0);
+      expect(stats.operationStats.test_stats_error?.errorCount).toBeGreaterThan(0);
+    });
+
+    test('should track operation metrics', async () => {
+      const slowOperation = async () => {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return "slow success";
+      };
+      
+      await streamTerminationErrorHandler.executeWithRetry(slowOperation, {
+        operationName: "test_duration",
+        enableMetrics: true
+      });
+      
+      const metrics = streamTerminationErrorHandler.getOperationMetrics("test_duration");
+      expect(metrics.totalCalls).toBeGreaterThan(0);
+      expect(metrics.successCount).toBeGreaterThan(0);
+      expect(metrics.totalDuration).toBeGreaterThan(0);
+    });
   });
 
-  // Test backoff delay calculation
-  const delay1 = streamTerminationErrorHandler._calculateBackoffDelay(1, 1000, 10000, 2);
-  const delay2 = streamTerminationErrorHandler._calculateBackoffDelay(2, 1000, 10000, 2);
-  const delay3 = streamTerminationErrorHandler._calculateBackoffDelay(3, 1000, 10000, 2);
-  console.log('✅ Backoff delay calculation:', {
-    delay1: delay1 === 1000,
-    delay2: delay2 === 2000,
-    delay3: delay3 === 4000
+  describe('Error recovery and concurrent operations', () => {
+    test('should handle concurrent operations', async () => {
+      const operations = [];
+      const results = [];
+      
+      // Start multiple concurrent operations
+      for (let i = 0; i < 3; i++) {
+        const operation = async () => `result-${i}`;
+        operations.push(operation);
+        
+        results.push(streamTerminationErrorHandler.executeWithRetry(operation, {
+          operationName: "concurrent_test",
+          sessionId: `session-${i}`
+        }));
+      }
+      
+      const resolvedResults = await Promise.all(results);
+      expect(resolvedResults).toEqual(['result-0', 'result-1', 'result-2']);
+    });
   });
 
-  // Test retry decision logic
-  const retryableError = new Error("connection timeout");
-  const nonRetryableError = new Error("invalid session ID");
-  
-  console.log('✅ Retry decision logic:', {
-    retryable: streamTerminationErrorHandler._shouldRetry(retryableError),
-    nonRetryable: !streamTerminationErrorHandler._shouldRetry(nonRetryableError)
-  });
-} catch (error) {
-  console.log('❌ Utility functions test failed:', error.message);
-}
+  describe('Utility functions', () => {
+    test('should generate unique operation IDs', () => {
+      const id1 = streamTerminationErrorHandler._generateOperationId("test_op");
+      const id2 = streamTerminationErrorHandler._generateOperationId("test_op");
+      
+      expect(id1).not.toBe(id2);
+      expect(/^test_op_\d+_[a-z0-9]+$/.test(id1)).toBe(true);
+      expect(/^test_op_\d+_[a-z0-9]+$/.test(id2)).toBe(true);
+    });
 
-// Test 7: Cleanup and resource management
-console.log('\n7️⃣  Testing cleanup and resource management...');
-try {
-  // Generate some logs and stats
-  streamTerminationErrorHandler.logInfo("Test log");
-  streamTerminationErrorHandler.logError("Test error");
-  
-  let logs = streamTerminationErrorHandler.getRecentLogs(10);
-  let stats = streamTerminationErrorHandler.getErrorStats();
-  
-  console.log('✅ Before cleanup:', {
-    logCount: logs.length,
-    hasErrors: stats.totalErrors > 0
-  });
-  
-  // Clear everything
-  streamTerminationErrorHandler.clearLogBuffer();
-  streamTerminationErrorHandler.clearErrorStats();
-  
-  logs = streamTerminationErrorHandler.getRecentLogs(10);
-  stats = streamTerminationErrorHandler.getErrorStats();
-  
-  console.log('✅ After cleanup:', {
-    logCount: logs.length,
-    hasErrors: stats.totalErrors === 0
-  });
-} catch (error) {
-  console.log('❌ Cleanup test failed:', error.message);
-}
+    test('should generate unique event IDs', () => {
+      const eventId1 = streamTerminationErrorHandler._generateEventId("test_event");
+      const eventId2 = streamTerminationErrorHandler._generateEventId("test_event");
+      
+      expect(eventId1).not.toBe(eventId2);
+      expect(/^test_event_\d+_[a-z0-9]+$/.test(eventId1)).toBe(true);
+      expect(/^test_event_\d+_[a-z0-9]+$/.test(eventId2)).toBe(true);
+    });
 
-// Test 8: Log filtering
-console.log('\n8️⃣  Testing log filtering...');
-try {
-  // Clear logs first
-  streamTerminationErrorHandler.clearLogBuffer();
-  
-  // Add logs of different levels
-  streamTerminationErrorHandler.logInfo("Info message");
-  streamTerminationErrorHandler.logWarn("Warning message");
-  streamTerminationErrorHandler.logError("Error message");
-  
-  const allLogs = streamTerminationErrorHandler.getRecentLogs(10);
-  const infoLogs = streamTerminationErrorHandler.getRecentLogs(10, "info");
-  const errorLogs = streamTerminationErrorHandler.getRecentLogs(10, "error");
-  
-  console.log('✅ Log filtering:', {
-    totalLogs: allLogs.length,
-    infoLogs: infoLogs.length,
-    errorLogs: errorLogs.length,
-    hasInfo: infoLogs.length > 0,
-    hasError: errorLogs.length > 0
-  });
-} catch (error) {
-  console.log('❌ Log filtering test failed:', error.message);
-}
+    test('should calculate backoff delays correctly', () => {
+      const delay1 = streamTerminationErrorHandler._calculateBackoffDelay(1, 1000, 10000, 2);
+      const delay2 = streamTerminationErrorHandler._calculateBackoffDelay(2, 1000, 10000, 2);
+      const delay3 = streamTerminationErrorHandler._calculateBackoffDelay(3, 1000, 10000, 2);
+      
+      expect(delay1).toBe(1000);
+      expect(delay2).toBe(2000);
+      expect(delay3).toBe(4000);
+    });
 
-console.log('\n🎉 StreamTerminationErrorHandler tests completed!'); 
+    test('should make correct retry decisions', () => {
+      const retryableError = new Error("connection timeout");
+      const nonRetryableError = new Error("invalid session ID");
+      
+      expect(streamTerminationErrorHandler._shouldRetry(retryableError)).toBe(true);
+      expect(streamTerminationErrorHandler._shouldRetry(nonRetryableError)).toBe(false);
+    });
+  });
+
+  describe('Cleanup and resource management', () => {
+    test('should clear logs and stats', () => {
+      // Generate some logs and stats
+      streamTerminationErrorHandler.logInfo("Test log");
+      streamTerminationErrorHandler.logError("Test error");
+      
+      let logs = streamTerminationErrorHandler.getRecentLogs(10);
+      let stats = streamTerminationErrorHandler.getErrorStats();
+      
+      expect(logs.length).toBeGreaterThan(0);
+      // Note: stats.totalErrors might be 0 if no errors were recorded in this test
+      // We'll just check that the stats object exists
+      expect(stats).toBeDefined();
+      
+      // Clear everything
+      streamTerminationErrorHandler.clearLogBuffer();
+      streamTerminationErrorHandler.clearErrorStats();
+      
+      logs = streamTerminationErrorHandler.getRecentLogs(10);
+      stats = streamTerminationErrorHandler.getErrorStats();
+      
+      // After clearing, logs should only contain the clear operation log entries
+      // (both clearLogBuffer() and clearErrorStats() add log entries when clearing)
+      expect(logs.length).toBe(2);
+      expect(logs[0].message).toContain("Cleared log buffer");
+      expect(logs[1].message).toContain("Cleared all error statistics");
+      expect(stats.totalErrors).toBe(0);
+    });
+  });
+
+  describe('Log filtering', () => {
+    test('should filter logs by level', () => {
+      // Add logs of different levels
+      streamTerminationErrorHandler.logInfo("Info message");
+      streamTerminationErrorHandler.logWarn("Warning message");
+      streamTerminationErrorHandler.logError("Error message");
+      
+      const allLogs = streamTerminationErrorHandler.getRecentLogs(10);
+      const infoLogs = streamTerminationErrorHandler.getRecentLogs(10, "info");
+      const errorLogs = streamTerminationErrorHandler.getRecentLogs(10, "error");
+      
+      expect(allLogs.length).toBeGreaterThan(0);
+      expect(infoLogs.length).toBeGreaterThan(0);
+      expect(errorLogs.length).toBeGreaterThan(0);
+    });
+  });
+}); 
