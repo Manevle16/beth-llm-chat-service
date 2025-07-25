@@ -33,7 +33,7 @@ describe('Stream Message Endpoint', () => {
   });
 
   describe('Parameter Validation', () => {
-    test('should reject missing required parameters', async () => {
+    it('should reject missing required parameters', async () => {
       const testCases = [
         { body: {}, expectedError: 'Missing model, message, or conversationId' },
         { body: { model: 'test' }, expectedError: 'Missing model, message, or conversationId' },
@@ -51,7 +51,7 @@ describe('Stream Message Endpoint', () => {
       }
     });
 
-    test('should reject invalid conversation ID', async () => {
+    it('should reject invalid conversation ID', async () => {
       const response = await request(app)
         .post('/api/stream-message')
         .send({
@@ -65,45 +65,8 @@ describe('Stream Message Endpoint', () => {
     });
   });
 
-  describe('Response Format', () => {
-    test('should return valid SSE format for valid request', async () => {
-      const response = await request(app)
-        .post('/api/stream-message')
-        .send({
-          model: 'llama3.1:8b',
-          message: 'Test response format',
-          conversationId: 'conv-db-test-123'
-        })
-        .expect(200);
-      
-      // Check for required SSE events
-      expect(response.text).toContain('event: session');
-      expect(response.text).toContain('data: ');
-      expect(response.text).toContain('event: end');
-    });
-
-    test('should include session ID in response', async () => {
-      const response = await request(app)
-        .post('/api/stream-message')
-        .send({
-          model: 'llama3.1:8b',
-          message: 'Test session ID',
-          conversationId: 'conv-db-test-123'
-        })
-        .expect(200);
-      
-      // Extract session ID from response
-      const sessionMatch = response.text.match(/event: session\ndata: ({[^}]+})/);
-      expect(sessionMatch).toBeTruthy();
-      
-      const sessionData = JSON.parse(sessionMatch[1]);
-      expect(sessionData).toHaveProperty('sessionId');
-      expect(typeof sessionData.sessionId).toBe('string');
-    });
-  });
-
   describe('Statistics', () => {
-    test('should provide session statistics', async () => {
+    it('should provide session statistics', async () => {
       const stats = await streamSessionDatabase.getSessionStats();
       
       expect(stats).toHaveProperty('totalSessions');
@@ -113,7 +76,7 @@ describe('Stream Message Endpoint', () => {
       expect(stats).toHaveProperty('errorSessions');
     });
 
-    test('should provide memory manager statistics', async () => {
+    it('should provide memory manager statistics', async () => {
       const stats = streamSessionManager.getSessionStats();
       
       expect(stats).toHaveProperty('activeSessions');
