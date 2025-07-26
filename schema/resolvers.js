@@ -1,11 +1,24 @@
 import bcrypt from "bcrypt";
 import pool from "../config/database.js";
 import ollamaService from "../services/ollamaService.js";
+import modelRouterService from "../services/modelRouterService.js";
 import streamSessionDatabase from "../services/streamSessionDatabase.js";
 import streamSessionManager from "../services/streamSessionManager.js";
 import { TERMINATION_REASON } from "../types/streamSession.js";
 
 const resolvers = {
+  JSON: {
+    __serialize(value) {
+      return value;
+    },
+    __parseValue(value) {
+      return value;
+    },
+    __parseLiteral(ast) {
+      return ast.value;
+    }
+  },
+
   Query: {
     // Get all public conversations
     conversations: async () => {
@@ -156,17 +169,159 @@ const resolvers = {
       }
     },
 
-    // Get available Ollama models
+    // Get available models from all providers
     availableModels: async () => {
       try {
-        const models = await ollamaService.listModels();
+        // Initialize the model router service if not already done
+        await modelRouterService.initialize();
+        
+        // Get all models from all providers
+        const allModels = await modelRouterService.listAllModels();
+        
+        // Extract unique providers
+        const providers = [...new Set(allModels.map(model => model.provider))];
+        
+        // Transform models to match GraphQL schema
+        const transformedModels = allModels.map(model => {
+          // Handle both string models (Ollama) and object models (Hugging Face)
+          const modelName = typeof model === 'string' ? model : model.name;
+          const modelProvider = typeof model === 'string' ? 'ollama' : (model.provider || 'huggingface');
+          
+          // For Hugging Face models, the object structure is complex due to incorrect createModelInfo usage
+          // Extract what we can safely
+          let displayName = modelName;
+          let description = '';
+          let capabilities = {
+            textGeneration: true,
+            streaming: true,
+            vision: false,
+            maxTokens: 4096,
+            contextLength: 4096,
+            supportedFormats: ['text'],
+            parameters: {}
+          };
+          let metadata = {
+            version: '',
+            size: 0,
+            lastLoaded: null,
+            lastUsed: null,
+            errorCount: 0
+          };
+          let available = true;
+          let lastUpdated = new Date().toISOString();
+          
+          if (typeof model === 'object') {
+            // Extract displayName if available
+            if (model.displayName && typeof model.displayName === 'string') {
+              displayName = model.displayName;
+            }
+            
+            // Extract description if available
+            if (model.description && typeof model.description === 'string') {
+              description = model.description;
+            }
+            
+            // Extract capabilities if available
+            if (model.capabilities && typeof model.capabilities === 'object') {
+              capabilities = {
+                textGeneration: model.capabilities.textGeneration !== false,
+                streaming: model.capabilities.streaming !== false,
+                vision: model.capabilities.vision === true,
+                maxTokens: model.capabilities.maxTokens || 4096,
+                contextLength: model.capabilities.contextLength || 4096,
+                supportedFormats: Array.isArray(model.capabilities.supportedFormats) ? model.capabilities.supportedFormats : ['text'],
+                parameters: model.capabilities.parameters || {}
+              };
+            }
+            
+            // Extract metadata if available
+            if (model.metadata && typeof model.metadata === 'object') {
+              metadata = {
+                version: model.metadata.version || '',
+                size: model.metadata.size || 0,
+                lastLoaded: model.metadata.lastLoaded ? new Date(model.metadata.lastLoaded).toISOString() : null,
+                lastUsed: model.metadata.lastUsed ? new Date(model.metadata.lastUsed).toISOString() : null,
+                errorCount: model.metadata.errorCount || 0
+              };
+            }
+            
+            // Extract availability
+            if (typeof model.available === 'boolean') {
+              available = model.available;
+            }
+            
+            // Extract lastUpdated
+            if (model.lastUpdated) {
+              lastUpdated = new Date(model.lastUpdated).toISOString();
+            }
+          }
+          
+          return {
+            name: modelName,
+            provider: modelProvider,
+            displayName,
+            description,
+            capabilities,
+            metadata,
+            available,
+            lastUpdated
+          };
+        });
+
         return {
-          models,
-          count: models.length
+          models: transformedModels,
+          count: transformedModels.length,
+          providers,
+          errors: []
         };
       } catch (error) {
         console.error("Error fetching available models:", error);
-        throw new Error("Failed to fetch available models");
+        
+        // Return partial results with error information
+        const errors = [error.message];
+        
+        // Try to get at least Ollama models as fallback
+        let fallbackModels = [];
+        let providers = [];
+        
+        try {
+          const ollamaModels = await ollamaService.listModels();
+          fallbackModels = ollamaModels.map(modelName => ({
+            name: modelName,
+            provider: 'ollama',
+            displayName: modelName,
+            description: '',
+            capabilities: {
+              textGeneration: true,
+              streaming: true,
+              vision: false,
+              maxTokens: 4096,
+              contextLength: 4096,
+              supportedFormats: ['text'],
+              parameters: {}
+            },
+            metadata: {
+              version: '',
+              size: 0,
+              lastLoaded: null,
+              lastUsed: null,
+              errorCount: 0
+            },
+            available: true,
+            lastUpdated: new Date().toISOString()
+          }));
+          providers = ['ollama'];
+        } catch (fallbackError) {
+          console.error("Fallback to Ollama models also failed:", fallbackError);
+          errors.push(fallbackError.message);
+        }
+        
+        return {
+          models: fallbackModels,
+          count: fallbackModels.length,
+          providers,
+          errors
+        };
       }
     }
   },

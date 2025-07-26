@@ -7,9 +7,9 @@ const originalWarn = console.warn;
 const originalError = console.error;
 
 // Silence all console output during tests
-console.log = () => {};
-console.warn = () => {};
-console.error = () => {};
+// console.log = () => {};
+// console.warn = () => {};
+// console.error = () => {};
 
 // Alternative: Keep errors for debugging but silence logs and warnings
 // console.log = () => {};

@@ -1,6 +1,8 @@
 import { gql } from "apollo-server-express";
 
 const typeDefs = gql`
+  scalar JSON
+
   type Conversation {
     id: ID!
     tabName: String!
@@ -57,9 +59,40 @@ const typeDefs = gql`
     tabName: String!
   }
 
+  type ModelInfo {
+    name: String!
+    provider: String!
+    displayName: String
+    description: String
+    capabilities: ModelCapabilities
+    metadata: ModelMetadata
+    available: Boolean!
+    lastUpdated: String!
+  }
+
+  type ModelCapabilities {
+    textGeneration: Boolean!
+    streaming: Boolean!
+    vision: Boolean!
+    maxTokens: Int!
+    contextLength: Int!
+    supportedFormats: [String!]!
+    parameters: JSON
+  }
+
+  type ModelMetadata {
+    version: String
+    size: Int
+    lastLoaded: String
+    lastUsed: String
+    errorCount: Int
+  }
+
   type AvailableModelsResponse {
-    models: [String!]!
+    models: [ModelInfo!]!
     count: Int!
+    providers: [String!]!
+    errors: [String!]
   }
 
   type WarmupOllamaResponse {

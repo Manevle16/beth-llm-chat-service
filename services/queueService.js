@@ -11,6 +11,7 @@ import {
   isRotationRequest
 } from "../types/modelRotation.js";
 import configService from "../config/modelRotation.js";
+import modelRotationService from './modelRotationService.js';
 
 class QueueService {
   constructor() {
@@ -54,63 +55,52 @@ class QueueService {
 
   /**
    * Enqueue a rotation request
-   * @param {string} targetModel - Target model name
+   * @param {Object} modelRef - { provider, modelName }
    * @param {string} source - Request source
    * @param {'high' | 'normal' | 'low'} priority - Request priority
    * @returns {Promise<boolean>} True if enqueued, false if rejected
    */
-  async enqueueRotationRequest(targetModel, source, priority = REQUEST_PRIORITY.NORMAL) {
+  async enqueueRotationRequest(modelRef, source, priority = REQUEST_PRIORITY.NORMAL) {
     this._ensureInitialized();
-
-    if (!targetModel || typeof targetModel !== 'string') {
-      throw new Error("Invalid target model provided");
+    if (!modelRef || typeof modelRef.provider !== 'string' || typeof modelRef.modelName !== 'string') {
+      throw new Error("Invalid modelRef provided (must have provider and modelName)");
     }
-
     if (!source || typeof source !== 'string') {
       throw new Error("Invalid source provided");
     }
-
     if (!Object.values(REQUEST_PRIORITY).includes(priority)) {
       throw new Error("Invalid priority level provided");
     }
-
     // Check if queue is full
     if (this._queue.length >= this._maxQueueSize) {
-      console.warn(`⚠️  Queue is full (${this._queue.length}/${this._maxQueueSize}), rejecting request for ${targetModel}`);
+      console.warn(`⚠️  Queue is full (${this._queue.length}/${this._maxQueueSize}), rejecting request for ${modelRef.provider}/${modelRef.modelName}`);
       return false;
     }
-
-    // Check for duplicate requests (same model, same source)
-    const duplicateIndex = this._queue.findIndex(request => 
-      request.targetModel === targetModel && request.source === source
+    // Check for duplicate requests (same provider, model, and source)
+    const duplicateIndex = this._queue.findIndex(request =>
+      request.provider === modelRef.provider &&
+      request.modelName === modelRef.modelName &&
+      request.source === source
     );
-
     if (duplicateIndex !== -1) {
-      console.log(`🔄 Duplicate request found for ${targetModel} from ${source}, updating priority`);
-      
+      console.log(`🔄 Duplicate request found for ${modelRef.provider}/${modelRef.modelName} from ${source}, updating priority`);
       // Update priority if new request has higher priority
       const existingRequest = this._queue[duplicateIndex];
       if (this._getPriorityWeight(priority) > this._getPriorityWeight(existingRequest.priority)) {
         existingRequest.priority = priority;
         existingRequest.timestamp = new Date();
-        console.log(`✅ Updated priority for ${targetModel} to ${priority}`);
+        console.log(`✅ Updated priority for ${modelRef.provider}/${modelRef.modelName} to ${priority}`);
       }
-      
       return true;
     }
-
     // Create new request
-    const request = createRotationRequest(targetModel, source, priority);
-    
+    const request = createRotationRequest(modelRef, source, priority);
     // Insert based on priority (higher priority first)
     const insertIndex = this._findInsertIndex(priority);
     this._queue.splice(insertIndex, 0, request);
-    
     this._pendingRequests++;
-    
-    console.log(`📥 Enqueued rotation request: ${targetModel} (${priority} priority) from ${source}`);
+    console.log(`📥 Enqueued rotation request: ${modelRef.provider}/${modelRef.modelName} (${priority} priority) from ${source}`);
     console.log(`📊 Queue status: ${this._queue.length}/${this._maxQueueSize} requests`);
-    
     return true;
   }
 
@@ -139,7 +129,7 @@ class QueueService {
       while (this._queue.length > 0) {
         const request = this._queue.shift();
         
-        console.log(`⚡ Processing request: ${request.targetModel} (${request.priority} priority) from ${request.source}`);
+        console.log(`⚡ Processing request: ${request.provider}/${request.modelName} (${request.priority} priority) from ${request.source}`);
         
         // Simulate processing time
         await this._processRequest(request);
@@ -148,7 +138,7 @@ class QueueService {
         this._pendingRequests = Math.max(0, this._pendingRequests - 1);
         processedCount++;
         
-        console.log(`✅ Processed request: ${request.targetModel}`);
+        console.log(`✅ Processed request: ${request.provider}/${request.modelName}`);
       }
     } catch (error) {
       console.error("❌ Error processing queue:", error.message);
@@ -231,7 +221,7 @@ class QueueService {
       this._queue.splice(index, 1);
       this._pendingRequests = Math.max(0, this._pendingRequests - 1);
       
-      console.log(`🗑️  Removed request: ${request.targetModel} (ID: ${requestId})`);
+      console.log(`🗑️  Removed request: ${request.provider}/${request.modelName} (ID: ${requestId})`);
       return true;
     }
 
@@ -381,16 +371,9 @@ class QueueService {
    * @private
    */
   async _processRequest(request) {
-    // This is a placeholder for actual request processing
-    // In the real implementation, this would integrate with ModelRotationService
-    
-    console.log(`🔄 Processing rotation request: ${request.targetModel} -> ${request.source}`);
-    
-    // Simulate processing time based on priority
-    const processingTime = this._getPriorityWeight(request.priority) * 100;
-    await new Promise(resolve => setTimeout(resolve, processingTime));
-    
-    console.log(`✅ Completed processing: ${request.targetModel}`);
+    // Call the actual model rotation logic
+    await modelRotationService.performRotation(request.provider, request.modelName, request.source, false);
+    // Optionally, you can add logging here if needed
   }
 
   /**

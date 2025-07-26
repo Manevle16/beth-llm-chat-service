@@ -6,6 +6,7 @@
  */
 
 import { Ollama } from "ollama";
+import huggingFaceService from './huggingFaceService.js';
 import {
   createRotationError,
   ERROR_CODES,
@@ -22,6 +23,7 @@ class ModelRotationService {
     this._ollama = new Ollama({
       host: process.env.OLLAMA_HOST || "http://localhost:11434"
     });
+    // TODO: Add HuggingFaceService, etc.
     this._isInitialized = false;
     this._isRotating = false;
     this._currentRotation = null;
@@ -57,22 +59,21 @@ class ModelRotationService {
 
   /**
    * Request model rotation
-   * @param {string} targetModel - Target model to load
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
+   * @param {string} modelName - Target model to load
    * @param {string} source - Request source
    * @param {'high' | 'normal' | 'low'} priority - Request priority
    * @returns {Promise<Object>} Rotation result
    */
-  async requestModelRotation(targetModel, source, priority = REQUEST_PRIORITY.NORMAL) {
+  async requestModelRotation(provider, modelName, source, priority = REQUEST_PRIORITY.NORMAL) {
     this._ensureInitialized();
-
-    if (!targetModel || typeof targetModel !== 'string') {
+    if (!provider || !modelName) {
       throw createRotationError(
         ERROR_CODES.INVALID_INPUT,
-        "Invalid target model provided",
+        "Provider and modelName required",
         OPERATIONS.REQUEST_ROTATION
       );
     }
-
     if (!source || typeof source !== 'string') {
       throw createRotationError(
         ERROR_CODES.INVALID_INPUT,
@@ -80,34 +81,31 @@ class ModelRotationService {
         OPERATIONS.REQUEST_ROTATION
       );
     }
-
-    console.log(`🔄 Requesting model rotation: ${targetModel} (${priority} priority) from ${source}`);
-
+    console.log(`🔄 Requesting model rotation: ${provider}/${modelName} (${priority} priority) from ${source}`);
     try {
-      // Check if model is already active
-      const activeModel = modelStateTracker.getActiveModel();
-      if (activeModel === targetModel) {
-        console.log(`✅ Model ${targetModel} is already active`);
+      // Check if model is already active for this provider
+      const activeModel = modelStateTracker.getActiveModel(provider);
+      if (activeModel === modelName) {
+        console.log(`✅ Model ${provider}/${modelName} is already active`);
         return {
           success: true,
-          model: targetModel,
+          provider,
+          model: modelName,
           action: 'no_change',
           message: 'Model already active'
         };
       }
-
-      // Check if model exists in Ollama
-      const modelExists = await this._checkModelExists(targetModel);
+      // Check if model exists for this provider
+      const modelExists = await this._checkModelExists(provider, modelName);
       if (!modelExists) {
         throw createRotationError(
           ERROR_CODES.MODEL_NOT_FOUND,
-          `Model ${targetModel} not found in Ollama`,
+          `Model ${modelName} not found in provider ${provider}`,
           OPERATIONS.REQUEST_ROTATION
         );
       }
-
-      // Enqueue rotation request
-      const enqueued = await queueService.enqueueRotationRequest(targetModel, source, priority);
+      // Enqueue rotation request (queue must now accept provider/modelName)
+      const enqueued = await queueService.enqueueRotationRequest({ provider, modelName }, source, priority);
       if (!enqueued) {
         throw createRotationError(
           ERROR_CODES.QUEUE_FULL,
@@ -115,57 +113,55 @@ class ModelRotationService {
           OPERATIONS.REQUEST_ROTATION
         );
       }
-
-      // Process queue if not already processing
       if (!queueService.getQueueStatus().isProcessing) {
         await this._processRotationQueue();
       }
-
       return {
         success: true,
-        model: targetModel,
+        provider,
+        model: modelName,
         action: 'queued',
         message: 'Rotation request queued successfully'
       };
-
     } catch (error) {
       console.error(`❌ Model rotation request failed: ${error.message}`);
-      this._recordFailedRotation(targetModel, source, error);
+      this._recordFailedRotation(provider, modelName, source, error);
       throw error;
     }
   }
 
   /**
    * Force immediate model rotation (bypasses queue)
-   * @param {string} targetModel - Target model to load
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
+   * @param {string} modelName - Target model to load
    * @param {string} source - Request source
    * @returns {Promise<Object>} Rotation result
    */
-  async forceModelRotation(targetModel, source) {
+  async forceModelRotation(provider, modelName, source) {
     this._ensureInitialized();
 
-    console.log(`⚡ Force rotating to model: ${targetModel} from ${source}`);
+    console.log(`⚡ Force rotating to model: ${provider}/${modelName} from ${source}`);
 
     try {
-      // Check if model exists
-      const modelExists = await this._checkModelExists(targetModel);
+      // Check if model exists for this provider
+      const modelExists = await this._checkModelExists(provider, modelName);
       if (!modelExists) {
         throw createRotationError(
           ERROR_CODES.MODEL_NOT_FOUND,
-          `Model ${targetModel} not found in Ollama`,
+          `Model ${modelName} not found in provider ${provider}`,
           OPERATIONS.FORCE_ROTATION
         );
       }
 
       // Perform immediate rotation
-      const result = await this._performRotation(targetModel, source, true);
+      const result = await this.performRotation(provider, modelName, source, true);
       
-      console.log(`✅ Force rotation completed: ${targetModel}`);
+      console.log(`✅ Force rotation completed: ${provider}/${modelName}`);
       return result;
 
     } catch (error) {
       console.error(`❌ Force rotation failed: ${error.message}`);
-      this._recordFailedRotation(targetModel, source, error);
+      this._recordFailedRotation(provider, modelName, source, error);
       throw error;
     }
   }
@@ -333,18 +329,30 @@ class ModelRotationService {
 
   /**
    * Check if model exists in Ollama
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
    * @param {string} modelName - Model name to check
    * @returns {Promise<boolean>} True if model exists
    * @private
    */
-  async _checkModelExists(modelName) {
-    try {
-      const models = await this._ollama.list();
-      return models.models.some(model => model.name === modelName);
-    } catch (error) {
-      console.warn(`⚠️  Could not check if model ${modelName} exists:`, error.message);
-      return false;
+  async _checkModelExists(provider, modelName) {
+    if (provider === 'ollama') {
+      try {
+        const models = await this._ollama.list();
+        return models.models.some(m => m.name === modelName);
+      } catch (error) {
+        console.warn(`⚠️  Could not check if model ${modelName} exists for provider ${provider}:`, error.message);
+        return false;
+      }
     }
+    if (provider === 'huggingface') {
+      try {
+        return await huggingFaceService.checkModelExists(modelName);
+      } catch (error) {
+        console.warn(`⚠️  Could not check if model ${modelName} exists for provider ${provider}:`, error.message);
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
@@ -370,11 +378,11 @@ class ModelRotationService {
       const queueContents = queueService.getQueueContents();
       for (const request of queueContents) {
         try {
-          await this._performRotation(request.targetModel, request.source, false);
+          await this.performRotation(request.provider, request.modelName, request.source, false);
           processedCount++;
         } catch (error) {
           console.error(`❌ Failed to process rotation request: ${error.message}`);
-          this._recordFailedRotation(request.targetModel, request.source, error);
+          this._recordFailedRotation(request.provider, request.modelName, request.source, error);
         }
       }
 
@@ -390,42 +398,45 @@ class ModelRotationService {
 
   /**
    * Perform actual model rotation
-   * @param {string} targetModel - Target model to load
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
+   * @param {string} modelName - Target model to load
    * @param {string} source - Request source
    * @param {boolean} isForced - Whether this is a forced rotation
    * @returns {Promise<Object>} Rotation result
-   * @private
    */
-  async _performRotation(targetModel, source, isForced = false) {
+  async performRotation(provider, modelName, source, isForced = false) {
     const rotationStart = new Date();
     this._currentRotation = {
-      targetModel,
+      provider,
+      modelName,
       source,
       startTime: rotationStart,
       isForced,
       status: 'in_progress'
     };
 
-    console.log(`🔄 Starting rotation to ${targetModel} (${isForced ? 'forced' : 'queued'})`);
+    console.log(`🔄 Starting rotation to ${provider}/${modelName} (${isForced ? 'forced' : 'queued'})`);
 
     try {
       // Check memory before rotation
       const memoryBefore = memoryMonitor.getCurrentMemoryUsage();
       console.log(`🧠 Memory before rotation: ${(memoryBefore.usedMemory / 1024 / 1024 / 1024).toFixed(2)} GB`);
 
-      // Unload current model if different
-      const activeModel = modelStateTracker.getActiveModel();
-      if (activeModel && activeModel !== targetModel) {
-        console.log(`📤 Unloading current model: ${activeModel}`);
-        await this._unloadModel(activeModel, source);
+      // Unload current model for this provider if different
+      const activeModel = modelStateTracker.getActiveModel(provider);
+      if (activeModel && activeModel !== modelName) {
+        console.log(`📤 Unloading current model: ${provider}/${activeModel}`);
+        await this._unloadModel(provider, activeModel, source);
       }
 
-      // Load target model
-      console.log(`📥 Loading target model: ${targetModel}`);
-      await this._loadModel(targetModel, source);
+      // Load target model for this provider
+      console.log(`📥 Loading target model: ${provider}/${modelName}`);
+      await this._loadModel(provider, modelName, source);
 
       // Update state tracker
-      modelStateTracker.setActiveModel(targetModel);
+      await modelStateTracker.setActiveModel(provider, modelName);
+      // Debug output
+      console.log(`[DEBUG] After setActiveModel:`, provider, modelName, modelStateTracker.getStateSummary());
 
       // Check memory after rotation
       const memoryAfter = memoryMonitor.getCurrentMemoryUsage();
@@ -433,127 +444,92 @@ class ModelRotationService {
 
       // Record successful rotation
       const rotationEnd = new Date();
-      const rotationDuration = rotationEnd - rotationStart;
-      
-      this._currentRotation.status = 'completed';
-      this._currentRotation.endTime = rotationEnd;
-      this._currentRotation.duration = rotationDuration;
-      this._currentRotation.memoryBefore = memoryBefore;
-      this._currentRotation.memoryAfter = memoryAfter;
-
-      this._rotationHistory.push({ ...this._currentRotation });
-
-      console.log(`✅ Rotation completed: ${targetModel} in ${rotationDuration}ms`);
-      
+      this._rotationHistory.push({
+        provider,
+        modelName,
+        source,
+        startTime: rotationStart,
+        endTime: rotationEnd,
+        durationMs: rotationEnd - rotationStart,
+        isForced,
+        status: 'success'
+      });
+      this._isRotating = false;
+      this._currentRotation = null;
       return {
         success: true,
-        model: targetModel,
-        action: 'rotated',
-        duration: rotationDuration,
-        memoryChange: memoryAfter.usedMemory - memoryBefore.usedMemory
+        provider,
+        model: modelName,
+        action: isForced ? 'forced' : 'rotated',
+        message: 'Model rotation completed successfully'
       };
-
     } catch (error) {
-      // Record failed rotation
-      const rotationEnd = new Date();
-      this._currentRotation.status = 'failed';
-      this._currentRotation.endTime = rotationEnd;
-      this._currentRotation.error = error.message;
-      this._currentRotation.duration = rotationEnd - rotationStart;
-
-      this._rotationHistory.push({ ...this._currentRotation });
-      this._recordFailedRotation(targetModel, source, error);
-
-      console.error(`❌ Rotation failed: ${targetModel} - ${error.message}`);
-      throw error;
-
-    } finally {
+      this._isRotating = false;
       this._currentRotation = null;
+      this._recordFailedRotation(provider, modelName, source, error);
+      throw error;
     }
   }
 
   /**
    * Load a model with retry logic
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
    * @param {string} modelName - Model to load
    * @param {string} source - Request source
    * @returns {Promise<void>}
    * @private
    */
-  async _loadModel(modelName, source) {
-    const maxRetries = configService.getSetting('ROTATION_RETRY_ATTEMPTS') || 3;
-    const retryDelay = configService.getSetting('ROTATION_RETRY_DELAY_MS') || 1000;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  async _loadModel(provider, modelName, source) {
+    if (provider === 'ollama') {
+      // Ollama loads model on demand
+      return true;
+    }
+    if (provider === 'huggingface') {
       try {
-        console.log(`📥 Loading model ${modelName} (attempt ${attempt}/${maxRetries})`);
-        
-        await this._ollama.pull({ model: modelName });
-        
-        console.log(`✅ Model ${modelName} loaded successfully`);
-        return;
-
+        await huggingFaceService.loadModel(modelName);
+        return true;
       } catch (error) {
-        console.warn(`⚠️  Failed to load model ${modelName} (attempt ${attempt}/${maxRetries}): ${error.message}`);
-        
-        if (attempt === maxRetries) {
-          throw createRotationError(
-            ERROR_CODES.MODEL_LOAD_FAILED,
-            `Failed to load model ${modelName} after ${maxRetries} attempts: ${error.message}`,
-            OPERATIONS.LOAD_MODEL
-          );
-        }
-
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+        throw new Error(`Failed to load Hugging Face model ${modelName}: ${error.message}`);
       }
     }
+    return true;
   }
 
   /**
    * Unload a model
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
    * @param {string} modelName - Model to unload
    * @param {string} source - Request source
    * @returns {Promise<void>}
    * @private
    */
-  async _unloadModel(modelName, source) {
-    try {
-      console.log(`📤 Unloading model ${modelName}`);
-      
-      // Note: Ollama doesn't have a direct "unload" command
-      // We'll clear the model from our state tracker
-      modelStateTracker.clearActiveModel();
-      
-      console.log(`✅ Model ${modelName} unloaded from state`);
-      
-    } catch (error) {
-      console.warn(`⚠️  Failed to unload model ${modelName}: ${error.message}`);
-      // Don't throw error for unload failures as they're not critical
+  async _unloadModel(provider, modelName, source) {
+    if (provider === 'ollama') {
+      // Ollama unloads model on demand
+      return true;
     }
+    if (provider === 'huggingface') {
+      try {
+        await huggingFaceService.unloadModel(modelName);
+        return true;
+      } catch (error) {
+        console.warn(`⚠️  Failed to unload Hugging Face model ${modelName}: ${error.message}`);
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
    * Record a failed rotation
+   * @param {string} provider - Model provider (e.g., 'ollama', 'huggingface')
    * @param {string} modelName - Model that failed to rotate
    * @param {string} source - Request source
    * @param {Error} error - Error that occurred
    * @private
    */
-  _recordFailedRotation(modelName, source, error) {
-    const failedRotation = {
-      modelName,
-      source,
-      timestamp: new Date(),
-      error: error.message,
-      errorCode: error.code || 'UNKNOWN'
-    };
-
-    this._failedRotations.push(failedRotation);
-
-    // Keep only last 50 failed rotations
-    if (this._failedRotations.length > 50) {
-      this._failedRotations = this._failedRotations.slice(-50);
-    }
+  _recordFailedRotation(provider, modelName, source, error) {
+    this._failedRotations.push({ provider, modelName, source, error, timestamp: new Date() });
   }
 }
 

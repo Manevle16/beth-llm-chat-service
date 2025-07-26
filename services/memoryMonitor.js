@@ -15,6 +15,18 @@ import {
 import configService from "../config/modelRotation.js";
 import modelStateTracker from "./modelStateTracker.js";
 
+// Helper to get total loaded model count across all providers
+function getTotalLoadedModelCount() {
+  const summary = modelStateTracker.getStateSummary();
+  let total = 0;
+  for (const key of Object.keys(summary)) {
+    if (key !== 'isInitialized' && summary[key] && summary[key].loadedModelCount) {
+      total += summary[key].loadedModelCount;
+    }
+  }
+  return total;
+}
+
 class MemoryMonitorService {
   constructor() {
     this._baselineMetrics = null;
@@ -263,7 +275,7 @@ class MemoryMonitorService {
         timestamp: this._baselineMetrics.timestamp.toISOString()
       } : null,
       lastCheck: this._lastCheckTime ? this._lastCheckTime.toISOString() : null,
-      loadedModels: modelStateTracker.getLoadedModelCount()
+      loadedModels: getTotalLoadedModelCount()
     };
   }
 

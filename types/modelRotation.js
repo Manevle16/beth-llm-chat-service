@@ -12,6 +12,7 @@
 /**
  * @typedef {Object} ModelMetadata
  * @property {string} name - The name of the model
+ * @property {string} provider - The provider of the model (e.g., 'ollama', 'huggingface')
  * @property {Date} loadedAt - When the model was loaded
  * @property {Date} lastUsedAt - When the model was last used
  * @property {number} memoryUsage - Memory usage in bytes
@@ -19,6 +20,7 @@
  */
 export const ModelMetadata = {
   name: '',
+  provider: '',
   loadedAt: new Date(),
   lastUsedAt: new Date(),
   memoryUsage: 0,
@@ -27,8 +29,9 @@ export const ModelMetadata = {
 
 /**
  * @typedef {Object} RotationRequest
+ * @property {string} provider - The provider of the model
+ * @property {string} modelName - The name of the model
  * @property {string} id - Unique request identifier
- * @property {string} targetModel - The model to rotate to
  * @property {'high' | 'normal' | 'low'} priority - Request priority
  * @property {Date} timestamp - When the request was created
  * @property {string} source - Source of the request (e.g., 'graphql', 'stream')
@@ -205,11 +208,13 @@ export const QUEUE_STATUS = {
 /**
  * Create a new ModelMetadata object
  * @param {string} name - Model name
+ * @param {string} provider - Provider name
  * @returns {ModelMetadata} New model metadata
  */
-export function createModelMetadata(name) {
+export function createModelMetadata(name, provider = '') {
   return {
     name,
+    provider,
     loadedAt: new Date(),
     lastUsedAt: new Date(),
     memoryUsage: 0,
@@ -224,10 +229,11 @@ export function createModelMetadata(name) {
  * @param {'high' | 'normal' | 'low'} priority - Request priority
  * @returns {RotationRequest} New rotation request
  */
-export function createRotationRequest(targetModel, source, priority = REQUEST_PRIORITY.NORMAL) {
+export function createRotationRequest({ provider, modelName }, source, priority = REQUEST_PRIORITY.NORMAL) {
   return {
     id: generateRequestId(),
-    targetModel,
+    provider,
+    modelName,
     priority,
     timestamp: new Date(),
     source
@@ -319,7 +325,8 @@ export function isRotationRequest(obj) {
   return (
     obj &&
     typeof obj.id === 'string' &&
-    typeof obj.targetModel === 'string' &&
+    typeof obj.provider === 'string' &&
+    typeof obj.modelName === 'string' &&
     Object.values(REQUEST_PRIORITY).includes(obj.priority) &&
     obj.timestamp instanceof Date &&
     typeof obj.source === 'string'
